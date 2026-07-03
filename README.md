@@ -122,6 +122,25 @@ python data/import_dataset_to_sqlite.py
 
 El script valida las columnas, normaliza `Order_Date`, crea `data/ecommerce_orders.db`, importa la tabla `orders` y agrega índices para consultas frecuentes. El `.db` no se sube a Git porque puede regenerarse desde el CSV.
 
+### Backend de datos conmutable: SQLite o Supabase
+
+La capa de acceso a datos (`db.py`) permite elegir el motor con la variable de entorno `DB_BACKEND`, sin tocar las tools de negocio:
+
+| `DB_BACKEND` | Motor | Uso |
+|---|---|---|
+| `sqlite` (por defecto) | `data/ecommerce_orders.db` | Laboratorio local, offline, cero configuración |
+| `supabase` | Postgres gestionado (Supabase) | Portal en la nube, multiusuario, base para pgvector |
+
+Las tools escriben el SQL una sola vez con marcadores `?`; `db.py` los adapta a cada motor. Para cargar el dataset completo en Supabase:
+
+```bash
+# .env con DB_BACKEND=supabase y DATABASE_URL de Supabase
+python data/import_dataset_to_postgres.py   # COPY de las 30.000 órdenes
+DB_BACKEND=supabase python mcp_datos.py     # el MCP de datos ahora consulta Postgres
+```
+
+La guía completa (esquema, `DATABASE_URL`, pooler, RLS y pgvector) está en [docs/BACKEND_SUPABASE.md](docs/BACKEND_SUPABASE.md).
+
 ## Tools personalizadas del MCP de datos
 
 | Tool | Capacidad de negocio | Columnas principales |
@@ -331,7 +350,7 @@ La memoria no es conocimiento permanente. Se elimina al reiniciar `mcp_agente.py
 
 ## Límites y extensiones
 
-Esta versión es apropiada para laboratorio local. Para un despliegue real conviene reemplazar SQLite por una base administrada, `InMemorySaver` por persistencia compartida, las URLs locales por servicios desplegados, y agregar autenticación, autorización, monitoreo, auditoría, pruebas y presupuesto de consumo.
+Esta versión funciona en laboratorio local (SQLite) y también contra una base administrada en la nube (Supabase/Postgres) mediante `DB_BACKEND`; ver [docs/BACKEND_SUPABASE.md](docs/BACKEND_SUPABASE.md). Para un despliegue productivo completo aún conviene reemplazar `InMemorySaver` por persistencia compartida (la tabla `agent_memory` con pgvector ya queda creada como base), las URLs locales por servicios desplegados, y agregar autenticación, autorización, monitoreo, auditoría, pruebas y presupuesto de consumo.
 
 No expongas `mcp_datos.py` a internet sin controles. Aunque las tools sean de solo lectura, los datos pueden requerir protección y permisos.
 
