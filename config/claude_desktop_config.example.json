@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "ecommerce-agent-with-memory": {
+      "command": "python",
+      "args": [
+        "/RUTA/ABSOLUTA/AL/PROYECTO/mcp_agente.py"
+      ],
+      "env": {
+        "OPENROUTER_API_KEY": "PEGA_AQUI_TU_CLAVE_O_USA_UN_GESTOR_DE_SECRETOS",
+        "OPENROUTER_MODEL": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "OPENROUTER_APP_URL": "http://localhost:8501",
+        "OPENROUTER_APP_NAME": "Clase 3 - Agente MCP E-commerce",
+        "DATA_MCP_URL": "http://127.0.0.1:8000/mcp",
+        "MEMORY_WINDOW_MESSAGES": "8"
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+fastmcp>=2.0.0
+langchain>=1.0.0
+langchain-openai>=1.0.0
+langchain-mcp-adapters>=0.1.0
+langgraph>=1.0.0
+streamlit>=1.40.0
+python-dotenv>=1.0.1
+pandas>=2.0.0
