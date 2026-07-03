@@ -155,6 +155,28 @@ La guía completa (esquema, `DATABASE_URL`, pooler, RLS y pgvector) está en [do
 
 No existe una tool genérica como `ejecutar_sql(sql)`. Esa decisión protege la base, vuelve visible la lógica de negocio y facilita que el LLM elija la herramienta correcta.
 
+## Dashboard BI
+
+`dashboard.py` es un dashboard analítico (Streamlit + Plotly) que lee de la misma capa `db.py`, por lo que funciona igual contra SQLite o Supabase según `DB_BACKEND`.
+
+```bash
+# Local con SQLite
+streamlit run dashboard.py
+# Contra Supabase
+DB_BACKEND=supabase streamlit run dashboard.py
+```
+
+Reutiliza el patrón visual del caso de referencia (tabs, tarjetas, heatmaps device × género) pero enfocado en **ventas, rentabilidad y geografía**. Cuatro pestañas:
+
+| Pestaña | Contenido |
+|---|---|
+| Resumen ejecutivo | KPIs (revenue, profit, margen, AOV, devoluciones, rating); revenue por categoría, país y segmento |
+| Tendencia temporal | Revenue y profit mensuales; órdenes y ticket promedio |
+| Segmentación | Distribución y heatmaps device × género (revenue, margen, ticket, devolución); canales y pagos |
+| Insights & Acciones | Top/bottom segmentos; scatter revenue-vs-margen por categoría; lectura rápida |
+
+Incluye filtros por año y país en la barra lateral. Es independiente del chat del agente (`app_streamlit.py`): uno visualiza, el otro conversa, ambos sobre los mismos datos.
+
 ## Requisitos
 
 - Python 3.11 o superior recomendado.
