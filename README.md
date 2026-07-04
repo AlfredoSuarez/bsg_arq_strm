@@ -1,5 +1,16 @@
 # Clase 3 — Agente MCP con memoria y OpenRouter sobre datos reales de e-commerce
 
+## Estado actual (julio 2026)
+
+Portal BI de e-commerce operativo, con agente conversacional y dashboard sobre los mismos datos:
+
+- **Datos en Supabase (Postgres)**: 30.000 órdenes cargadas · backend conmutable SQLite/Supabase (`db.py`) con auto-detección por `DATABASE_URL`.
+- **Dashboard BI bilingüe (`dashboard.py`)**: Streamlit + Plotly, 5 pestañas (Resumen, Tendencia, Segmentación device×género, Insights, Asistente) con toggle **Español / English**.
+- **Agente MCP embebido**: la pestaña Asistente corre el agente in-process (levanta `mcp_datos.py` como subproceso), así un solo deploy ofrece dashboard + chat.
+- **Desplegado en Streamlit Community Cloud** contra Supabase (transaction pooler, puerto 6543).
+
+Guías: [docs/BACKEND_SUPABASE.md](docs/BACKEND_SUPABASE.md) · [docs/DEPLOY_STREAMLIT.md](docs/DEPLOY_STREAMLIT.md)
+
 ## Propósito
 
 Este proyecto continúa el laboratorio realizado en Colab. Conserva la misma lógica: un agente LangChain descubre tools de un servidor MCP, y cada tool encapsula una consulta SQL explícita, parametrizada y revisable. El cambio de esta versión es el proveedor del modelo: el agente usa OpenRouter y, por defecto, el modelo `nvidia/nemotron-3-ultra-550b-a55b:free`.
@@ -7,7 +18,7 @@ Este proyecto continúa el laboratorio realizado en Colab. Conserva la misma ló
 La meta no es enseñar un chatbot aislado. Se enseña una arquitectura de integración compuesta:
 
 ```text
-CSV real → SQLite → MCP de datos → agente LangChain con memoria → MCP del agente → Streamlit / Claude Desktop
+CSV real → SQLite / Supabase (Postgres) → MCP de datos → agente LangChain con memoria → MCP del agente → Streamlit / Claude Desktop
 ```
 
 El proyecto permite trabajar cinco ideas en una misma experiencia:
