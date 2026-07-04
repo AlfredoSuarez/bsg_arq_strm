@@ -1,9 +1,16 @@
 """Capa de acceso a datos conmutable: SQLite (local) o Supabase/Postgres (nube).
 
-El backend se elige con la variable de entorno DB_BACKEND:
+El backend se resuelve EN TIEMPO DE EJECUCIÓN con este orden de prioridad:
 
-    DB_BACKEND=sqlite     -> usa data/ecommerce_orders.db            (por defecto)
-    DB_BACKEND=supabase   -> usa DATABASE_URL (Postgres de Supabase)
+    1. DB_BACKEND=supabase|postgres  -> Supabase (Postgres), requiere DATABASE_URL.
+    2. DB_BACKEND=sqlite             -> SQLite (data/ecommerce_orders.db).
+    3. Sin DB_BACKEND explícito:
+         - si existe DATABASE_URL      -> Supabase (auto).
+         - si no                       -> SQLite.
+
+La regla 3 evita el fallo típico de despliegue: si defines DATABASE_URL como
+secret/variable, la app usa Supabase automáticamente y NUNCA cae a SQLite (que no
+existe en la nube). Para forzar SQLite en local, usa DB_BACKEND=sqlite.
 
 Objetivo de diseño: las tools MCP escriben SQL UNA sola vez, con marcadores de
 posición '?', y esta capa lo adapta a cada motor. Así el laboratorio local sigue
@@ -25,13 +32,18 @@ from pathlib import Path
 # Los backends de Postgres aceptados como sinónimos de Supabase.
 _POSTGRES_BACKENDS = {"supabase", "postgres", "postgresql"}
 
-DB_BACKEND = os.getenv("DB_BACKEND", "sqlite").strip().lower()
 SQLITE_PATH = Path(__file__).parent / "data" / "ecommerce_orders.db"
 
 
 def backend_activo() -> str:
-    """Devuelve el backend en uso, normalizado a 'sqlite' o 'supabase'."""
-    return "supabase" if DB_BACKEND in _POSTGRES_BACKENDS else "sqlite"
+    """Resuelve el backend en uso ('sqlite' o 'supabase') leyendo el entorno en runtime."""
+    explicit = os.getenv("DB_BACKEND", "").strip().lower()
+    if explicit in _POSTGRES_BACKENDS:
+        return "supabase"
+    if explicit == "sqlite":
+        return "sqlite"
+    # Sin configuración explícita: la presencia de DATABASE_URL decide.
+    return "supabase" if os.getenv("DATABASE_URL") else "sqlite"
 
 
 def _query_sqlite(sql: str, params: tuple) -> list[dict]:

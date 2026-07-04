@@ -166,7 +166,7 @@ streamlit run dashboard.py
 DB_BACKEND=supabase streamlit run dashboard.py
 ```
 
-Reutiliza el patrón visual del caso de referencia (tabs, tarjetas, heatmaps device × género) pero enfocado en **ventas, rentabilidad y geografía**. Cuatro pestañas:
+Reutiliza el patrón visual del caso de referencia (tabs, tarjetas, heatmaps device × género) pero enfocado en **ventas, rentabilidad y geografía**. Cinco pestañas:
 
 | Pestaña | Contenido |
 |---|---|
@@ -174,8 +174,11 @@ Reutiliza el patrón visual del caso de referencia (tabs, tarjetas, heatmaps dev
 | Tendencia temporal | Revenue y profit mensuales; órdenes y ticket promedio |
 | Segmentación | Distribución y heatmaps device × género (revenue, margen, ticket, devolución); canales y pagos |
 | Insights & Acciones | Top/bottom segmentos; scatter revenue-vs-margen por categoría; lectura rápida |
+| 🤖 Asistente | Agente MCP conversacional **embebido en el mismo proceso** (in-process) sobre los mismos datos |
 
-Incluye filtros por año y país en la barra lateral. Es independiente del chat del agente (`app_streamlit.py`): uno visualiza, el otro conversa, ambos sobre los mismos datos.
+Incluye filtros por año y país en la barra lateral. La pestaña Asistente levanta `mcp_datos.py` como subproceso local y corre el agente in-process, así que un solo deploy de Streamlit ofrece dashboard + chat. Guía de despliegue: [docs/DEPLOY_STREAMLIT.md](docs/DEPLOY_STREAMLIT.md).
+
+> **Selección de backend (importante para desplegar):** basta definir `DATABASE_URL` (secret) para que la app use Supabase automáticamente; no hace falta `DB_BACKEND`. Esto evita el fallo de caer a SQLite en la nube (donde no existe el `.db`).
 
 ## Requisitos
 

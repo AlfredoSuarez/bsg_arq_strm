@@ -15,6 +15,16 @@ el dataset real de 30.000 órdenes.
 """
 from __future__ import annotations
 
+import asyncio
+import atexit
+import os
+import socket
+import subprocess
+import sys
+import time
+import uuid
+from pathlib import Path
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -22,9 +32,59 @@ import streamlit as st
 from dotenv import load_dotenv
 from plotly.subplots import make_subplots
 
-from db import backend_activo, run_query
-
+# --- Entorno ANTES de importar db.py (db.py resuelve el backend leyendo el entorno) ---
 load_dotenv()
+
+
+def _bridge_secrets() -> None:
+    """Copia los secrets de Streamlit Cloud a variables de entorno.
+
+    Necesario para que db.py (dashboard) y el subproceso del MCP de datos vean
+    DATABASE_URL / OPENROUTER_API_KEY. Sin esto, en la nube caería a SQLite.
+    """
+    for key in ("DB_BACKEND", "DATABASE_URL", "OPENROUTER_API_KEY", "OPENROUTER_MODEL"):
+        try:
+            if not os.environ.get(key) and key in st.secrets:
+                os.environ[key] = str(st.secrets[key])
+        except Exception:  # noqa: BLE001 - sin archivo de secrets en local
+            pass
+
+
+_bridge_secrets()
+
+from db import backend_activo, run_query  # noqa: E402 - tras configurar el entorno
+
+REPO_DIR = Path(__file__).parent
+DATA_MCP_HOST, DATA_MCP_PORT = "127.0.0.1", 8000
+
+
+def _port_open(host: str, port: int, timeout: float = 0.5) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        return s.connect_ex((host, port)) == 0
+
+
+@st.cache_resource(show_spinner=False)
+def ensure_data_mcp() -> str:
+    """Levanta mcp_datos.py como subproceso HTTP una sola vez (para el asistente).
+
+    Hereda el entorno (DATABASE_URL, etc.), así el MCP consulta el mismo Supabase.
+    """
+    if _port_open(DATA_MCP_HOST, DATA_MCP_PORT):
+        return "externo"  # ya corriendo (dev local con mcp_datos.py aparte)
+    proc = subprocess.Popen(
+        [sys.executable, str(REPO_DIR / "mcp_datos.py")],
+        cwd=str(REPO_DIR),
+        env=os.environ.copy(),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+    atexit.register(proc.terminate)
+    for _ in range(60):
+        if _port_open(DATA_MCP_HOST, DATA_MCP_PORT):
+            return "iniciado"
+        time.sleep(0.5)
+    raise RuntimeError("El MCP de datos no arrancó en 127.0.0.1:8000")
 
 st.set_page_config(
     page_title="Portal BI E-commerce",
@@ -125,10 +185,11 @@ try:
     years_df = q("SELECT DISTINCT year FROM orders ORDER BY year")
     countries_df = q("SELECT DISTINCT country FROM orders ORDER BY country")
 except Exception as exc:  # noqa: BLE001
-    st.error(f"No fue posible leer los datos ({backend_activo()}): {exc}")
+    st.error(f"No fue posible leer los datos (backend: {backend_activo()}): {exc}")
     st.info(
-        "Con SQLite ejecuta antes `python data/import_dataset_to_sqlite.py`. "
-        "Con Supabase define `DB_BACKEND=supabase` y `DATABASE_URL` en el .env."
+        "En la nube define el secret **DATABASE_URL** (Supabase) — con eso la app usa "
+        "Postgres automáticamente. En local con SQLite, ejecuta antes "
+        "`python data/import_dataset_to_sqlite.py`."
     )
     st.stop()
 
@@ -178,8 +239,8 @@ k = kpis.iloc[0]
 st.sidebar.metric("Órdenes (filtro)", f"{int(k['orders']):,}")
 st.sidebar.metric("Revenue (filtro)", f"${float(k['revenue']):,.0f}")
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["Resumen ejecutivo", "Tendencia temporal", "Segmentación", "Insights & Acciones"]
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["Resumen ejecutivo", "Tendencia temporal", "Segmentación", "Insights & Acciones", "🤖 Asistente"]
 )
 
 # =========================================================================== #
@@ -486,6 +547,71 @@ with tab4:
         f'</ul></div>',
         unsafe_allow_html=True,
     )
+
+# =========================================================================== #
+# TAB 5 — Asistente conversacional (agente MCP embebido en el proceso)
+# =========================================================================== #
+with tab5:
+    st.subheader("Asistente conversacional")
+    st.caption(
+        "Agente LangChain (vía OpenRouter) que consulta los mismos datos a través "
+        "del MCP de datos, en el mismo proceso del dashboard."
+    )
+
+    if not os.getenv("OPENROUTER_API_KEY"):
+        st.warning(
+            "Configura el secret **OPENROUTER_API_KEY** (Settings → Secrets) "
+            "para habilitar el asistente."
+        )
+    else:
+        if "chat_msgs" not in st.session_state:
+            st.session_state.chat_msgs = []
+        if "chat_sid" not in st.session_state:
+            st.session_state.chat_sid = "dash-" + uuid.uuid4().hex[:8]
+
+        for m in st.session_state.chat_msgs:
+            with st.chat_message(m["role"]):
+                st.markdown(m["content"])
+
+        with st.form("chat_form", clear_on_submit=True):
+            pregunta = st.text_input(
+                "Pregunta al agente",
+                placeholder="Ej.: ¿Qué país genera más utilidad en 2024?",
+            )
+            enviar = st.form_submit_button("Enviar")
+
+        if enviar and pregunta.strip():
+            st.session_state.chat_msgs.append({"role": "user", "content": pregunta})
+            with st.chat_message("user"):
+                st.markdown(pregunta)
+
+            traza = None
+            with st.chat_message("assistant"):
+                with st.spinner("El agente consulta los datos vía MCP..."):
+                    try:
+                        ensure_data_mcp()
+                        from agent_core import resolver_consulta
+
+                        res = asyncio.run(
+                            resolver_consulta(
+                                pregunta, st.session_state.chat_sid, canal="dashboard"
+                            )
+                        )
+                        answer = res["respuesta"]
+                        traza = res.get("traza")
+                    except Exception as exc:  # noqa: BLE001
+                        answer = f"No fue posible responder: {exc}"
+                st.markdown(answer)
+
+            st.session_state.chat_msgs.append({"role": "assistant", "content": answer})
+            if traza:
+                with st.expander("Traza de orquestación (tools MCP invocadas)"):
+                    st.json(traza)
+
+        if st.session_state.chat_msgs and st.button("Nueva conversación"):
+            st.session_state.chat_msgs = []
+            st.session_state.chat_sid = "dash-" + uuid.uuid4().hex[:8]
+            st.rerun()
 
 st.caption(
     f"Portal BI E-commerce · backend: {backend_activo()} · "
