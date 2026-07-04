@@ -1,17 +1,17 @@
 """
-Portal BI E-commerce — Dashboard analítico (Streamlit + Plotly).
+Portal BI E-commerce — Dashboard analítico (Streamlit + Plotly), bilingüe ES/EN.
 
 Lee de la MISMA capa de datos conmutable que el resto del proyecto (db.py):
 
     DB_BACKEND=sqlite    -> data/ecommerce_orders.db
     DB_BACKEND=supabase  -> DATABASE_URL (Postgres de Supabase)
+    (sin DB_BACKEND, si hay DATABASE_URL usa Supabase automáticamente)
 
 Ejecutar:
     streamlit run dashboard.py
 
-Reutiliza el patrón visual del dashboard de referencia (tabs, tarjetas, heatmaps
-device × género) pero enfocado en ventas, margen, geografía y devoluciones sobre
-el dataset real de 30.000 órdenes.
+Incluye un toggle de idioma (Español / English) que traduce la interfaz y hace
+que el asistente responda en el idioma elegido.
 """
 from __future__ import annotations
 
@@ -66,12 +66,9 @@ def _port_open(host: str, port: int, timeout: float = 0.5) -> bool:
 
 @st.cache_resource(show_spinner=False)
 def ensure_data_mcp() -> str:
-    """Levanta mcp_datos.py como subproceso HTTP una sola vez (para el asistente).
-
-    Hereda el entorno (DATABASE_URL, etc.), así el MCP consulta el mismo Supabase.
-    """
+    """Levanta mcp_datos.py como subproceso HTTP una sola vez (para el asistente)."""
     if _port_open(DATA_MCP_HOST, DATA_MCP_PORT):
-        return "externo"  # ya corriendo (dev local con mcp_datos.py aparte)
+        return "externo"
     proc = subprocess.Popen(
         [sys.executable, str(REPO_DIR / "mcp_datos.py")],
         cwd=str(REPO_DIR),
@@ -86,6 +83,114 @@ def ensure_data_mcp() -> str:
         time.sleep(0.5)
     raise RuntimeError("El MCP de datos no arrancó en 127.0.0.1:8000")
 
+
+# --------------------------------------------------------------------------- #
+# i18n: diccionario de traducciones. t(key) devuelve el texto del idioma activo.
+# --------------------------------------------------------------------------- #
+T: dict[str, dict[str, str]] = {
+    "header_sub": {"es": "Ventas · Rentabilidad · Geografía · Segmentación · Devoluciones",
+                   "en": "Sales · Profitability · Geography · Segmentation · Returns"},
+    "filters": {"es": "Filtros", "en": "Filters"},
+    "backend": {"es": "Backend activo", "en": "Active backend"},
+    "year": {"es": "Año", "en": "Year"},
+    "country": {"es": "País", "en": "Country"},
+    "data_note": {"es": "Datos de e-commerce · uso técnico/pedagógico, no es evidencia comercial real.",
+                  "en": "E-commerce data · technical/educational use, not real commercial evidence."},
+    "orders_filter": {"es": "Órdenes (filtro)", "en": "Orders (filter)"},
+    "revenue_filter": {"es": "Revenue (filtro)", "en": "Revenue (filter)"},
+    "no_data": {"es": "No hay datos para el filtro seleccionado.", "en": "No data for the selected filter."},
+    "read_error": {"es": "No fue posible leer los datos", "en": "Could not read the data"},
+    "read_hint": {"es": "En la nube define el secret DATABASE_URL (Supabase). En local con SQLite, ejecuta antes: python data/import_dataset_to_sqlite.py",
+                  "en": "In the cloud set the DATABASE_URL secret (Supabase). Locally with SQLite, first run: python data/import_dataset_to_sqlite.py"},
+    # Tabs
+    "tab_summary": {"es": "Resumen ejecutivo", "en": "Executive summary"},
+    "tab_trend": {"es": "Tendencia temporal", "en": "Time trend"},
+    "tab_segment": {"es": "Segmentación", "en": "Segmentation"},
+    "tab_insights": {"es": "Insights & Acciones", "en": "Insights & Actions"},
+    "tab_assistant": {"es": "🤖 Asistente", "en": "🤖 Assistant"},
+    # KPIs
+    "key_indicators": {"es": "Indicadores clave", "en": "Key indicators"},
+    "kpi_revenue": {"es": "Revenue", "en": "Revenue"},
+    "kpi_revenue_sub": {"es": "Facturación total", "en": "Total revenue"},
+    "kpi_profit": {"es": "Profit", "en": "Profit"},
+    "kpi_orders": {"es": "Órdenes", "en": "Orders"},
+    "kpi_aov": {"es": "Ticket promedio", "en": "Avg order value"},
+    "kpi_aov_sub": {"es": "Order Amount medio", "en": "Mean order amount"},
+    "kpi_return": {"es": "Tasa de devolución", "en": "Return rate"},
+    "kpi_return_sub": {"es": "Órdenes devueltas", "en": "Returned orders"},
+    "kpi_rating": {"es": "Rating medio", "en": "Avg rating"},
+    "kpi_rating_sub": {"es": "Satisfacción", "en": "Satisfaction"},
+    "kpi_margin": {"es": "Margen", "en": "Margin"},
+    "kpi_rev_cust": {"es": "Revenue / cliente", "en": "Revenue / customer"},
+    "kpi_avg": {"es": "Promedio", "en": "Average"},
+    "chart_rev_cat": {"es": "Revenue por categoría", "en": "Revenue by category"},
+    "chart_top_countries": {"es": "Top 10 países por revenue", "en": "Top 10 countries by revenue"},
+    "chart_rev_segment": {"es": "Revenue por segmento de cliente (color = margen %)",
+                          "en": "Revenue by customer segment (color = margin %)"},
+    # Trend
+    "monthly_evo": {"es": "Evolución mensual", "en": "Monthly evolution"},
+    "rev_profit_month": {"es": "Revenue y Profit por mes", "en": "Revenue and Profit by month"},
+    "avg_rev_month": {"es": "Revenue medio/mes", "en": "Avg revenue/month"},
+    "best_month": {"es": "Mejor mes", "en": "Best month"},
+    "worst_month": {"es": "Peor mes", "en": "Worst month"},
+    "avg_orders_month": {"es": "Órdenes medias/mes", "en": "Avg orders/month"},
+    "orders_ticket": {"es": "Órdenes y ticket promedio", "en": "Orders and average ticket"},
+    "orders_by_stage": {"es": "Órdenes", "en": "Orders"},
+    "avg_ticket": {"es": "Ticket promedio", "en": "Avg ticket"},
+    "ticket_axis": {"es": "Ticket ($)", "en": "Ticket ($)"},
+    # Segmentation
+    "user_dist": {"es": "Distribución de usuarios", "en": "User distribution"},
+    "orders_by_gender": {"es": "Órdenes por género", "en": "Orders by gender"},
+    "orders_by_device": {"es": "Órdenes por dispositivo", "en": "Orders by device"},
+    "heatmaps_dg": {"es": "Heatmaps: dispositivo × género", "en": "Heatmaps: device × gender"},
+    "hm_revenue": {"es": "Revenue", "en": "Revenue"},
+    "hm_margin": {"es": "Margen %", "en": "Margin %"},
+    "hm_aov": {"es": "Ticket promedio", "en": "Avg order value"},
+    "hm_return": {"es": "Tasa de devolución %", "en": "Return rate %"},
+    "channels_payments": {"es": "Canales y métodos de pago", "en": "Channels and payment methods"},
+    "rev_by_channel": {"es": "Revenue por canal de tráfico", "en": "Revenue by traffic source"},
+    "orders_by_payment": {"es": "Órdenes por método de pago", "en": "Orders by payment method"},
+    # Insights
+    "seg_by_revenue": {"es": "Segmentos device × género (por revenue)",
+                       "en": "Device × gender segments (by revenue)"},
+    "top_segments": {"es": "Top segmentos", "en": "Top segments"},
+    "low_segments": {"es": "Segmentos de menor revenue", "en": "Lowest-revenue segments"},
+    "cat_profit": {"es": "Categorías por rentabilidad", "en": "Categories by profitability"},
+    "scatter_title": {"es": "Revenue vs Margen por categoría (tamaño = profit, color = devolución %)",
+                      "en": "Revenue vs Margin by category (size = profit, color = return %)"},
+    "lbl_revenue": {"es": "Revenue ($)", "en": "Revenue ($)"},
+    "lbl_margin": {"es": "Margen %", "en": "Margin %"},
+    "lbl_return": {"es": "Devolución %", "en": "Return %"},
+    "quick_read": {"es": "Lectura rápida", "en": "Quick read"},
+    "most_profitable": {"es": "Categoría más rentable", "en": "Most profitable category"},
+    "of_profit_margin": {"es": "de profit, margen", "en": "in profit, margin"},
+    "highest_return": {"es": "Mayor tasa de devolución", "en": "Highest return rate"},
+    "review_quality": {"es": "revisar calidad, tallas o descripción",
+                       "en": "review quality, sizing or description"},
+    "overall_margin": {"es": "Margen global del filtro", "en": "Overall margin of filter"},
+    "over_revenue": {"es": "sobre", "en": "over"},
+    "of_revenue": {"es": "de revenue", "en": "in revenue"},
+    # Assistant
+    "assistant_title": {"es": "Asistente conversacional", "en": "Conversational assistant"},
+    "assistant_caption": {"es": "Agente LangChain (vía OpenRouter) que consulta los mismos datos a través del MCP de datos, en el mismo proceso del dashboard.",
+                          "en": "LangChain agent (via OpenRouter) querying the same data through the data MCP, in the dashboard's own process."},
+    "assistant_nokey": {"es": "Configura el secret OPENROUTER_API_KEY (Settings → Secrets) para habilitar el asistente.",
+                        "en": "Set the OPENROUTER_API_KEY secret (Settings → Secrets) to enable the assistant."},
+    "ask_agent": {"es": "Pregunta al agente", "en": "Ask the agent"},
+    "ask_placeholder": {"es": "Ej.: ¿Qué país genera más utilidad en 2024?",
+                        "en": "E.g.: Which country generates the most profit in 2024?"},
+    "send": {"es": "Enviar", "en": "Send"},
+    "agent_spinner": {"es": "El agente consulta los datos vía MCP...",
+                      "en": "The agent is querying the data via MCP..."},
+    "agent_error": {"es": "No fue posible responder", "en": "Could not answer"},
+    "agent_trace": {"es": "Traza de orquestación (tools MCP invocadas)",
+                    "en": "Orchestration trace (MCP tools invoked)"},
+    "new_chat": {"es": "Nueva conversación", "en": "New conversation"},
+    "footer": {"es": "Portal BI E-commerce · backend: {b} · datos de uso técnico/pedagógico.",
+               "en": "E-commerce BI Portal · backend: {b} · technical/educational data."},
+}
+
+
 st.set_page_config(
     page_title="Portal BI E-commerce",
     page_icon="📊",
@@ -94,7 +199,7 @@ st.set_page_config(
 )
 
 # --------------------------------------------------------------------------- #
-# Estilos (adaptados del patrón de referencia, legibles en claro y oscuro).
+# Estilos (legibles en claro y oscuro).
 # --------------------------------------------------------------------------- #
 st.markdown(
     """
@@ -142,13 +247,24 @@ PALETTE = ["#2E86AB", "#06A77D", "#F18F01", "#A23B72", "#E63946", "#264653", "#E
 
 
 # --------------------------------------------------------------------------- #
+# Idioma (toggle) — se elige antes de renderizar el resto.
+# --------------------------------------------------------------------------- #
+with st.sidebar:
+    lang = st.radio("🌐 Idioma / Language", ["Español", "English"], horizontal=True, key="lang")
+LANG = "en" if lang == "English" else "es"
+
+
+def t(key: str) -> str:
+    return T[key][LANG]
+
+
+# --------------------------------------------------------------------------- #
 # Acceso a datos: usa la capa conmutable y devuelve DataFrames cacheados.
 # --------------------------------------------------------------------------- #
 @st.cache_data(ttl=600, show_spinner=False)
 def q(sql: str, params: tuple = ()) -> pd.DataFrame:
     df = pd.DataFrame(run_query(sql, params))
     # Postgres devuelve numéricos como Decimal (dtype object); Plotly exige float.
-    # Convierte solo columnas cuyos valores no nulos sean todos numéricos.
     for col in df.columns:
         if df[col].dtype == object:
             mask = df[col].notna()
@@ -185,38 +301,33 @@ try:
     years_df = q("SELECT DISTINCT year FROM orders ORDER BY year")
     countries_df = q("SELECT DISTINCT country FROM orders ORDER BY country")
 except Exception as exc:  # noqa: BLE001
-    st.error(f"No fue posible leer los datos (backend: {backend_activo()}): {exc}")
-    st.info(
-        "En la nube define el secret **DATABASE_URL** (Supabase) — con eso la app usa "
-        "Postgres automáticamente. En local con SQLite, ejecuta antes "
-        "`python data/import_dataset_to_sqlite.py`."
-    )
+    st.error(f"{t('read_error')} ({backend_activo()}): {exc}")
+    st.info(t("read_hint"))
     st.stop()
 
 all_years = [int(y) for y in years_df["year"].tolist()]
 all_countries = countries_df["country"].tolist()
 
 with st.sidebar:
-    st.header("Filtros")
-    st.caption(f"Backend activo: **{backend_activo()}**")
-    sel_years = st.multiselect("Año", all_years, default=all_years)
-    sel_countries = st.multiselect("País", all_countries, default=[])
+    st.header(t("filters"))
+    st.caption(f"{t('backend')}: **{backend_activo()}**")
+    sel_years = st.multiselect(t("year"), all_years, default=all_years)
+    sel_countries = st.multiselect(t("country"), all_countries, default=[])
     st.divider()
-    st.caption("Datos de e-commerce · uso técnico/pedagógico, no es evidencia comercial real.")
+    st.caption(t("data_note"))
 
 where, params = build_where(sel_years, sel_countries)
 
 st.markdown(
-    """
+    f"""
 <div class="main-header">
     <h1>📊 Portal BI E-commerce</h1>
-    <p style="font-size:1.1rem;margin-top:0.5rem;">Ventas · Rentabilidad · Geografía · Segmentación · Devoluciones</p>
+    <p style="font-size:1.1rem;margin-top:0.5rem;">{t('header_sub')}</p>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
-# KPIs globales (respetan el filtro).
 kpis = q(
     f"""
     SELECT COUNT(*) AS orders, COUNT(DISTINCT customer_id) AS customers,
@@ -232,36 +343,34 @@ kpis = q(
 )
 
 if kpis.empty or not kpis.loc[0, "orders"]:
-    st.warning("No hay datos para el filtro seleccionado.")
+    st.warning(t("no_data"))
     st.stop()
 
 k = kpis.iloc[0]
-st.sidebar.metric("Órdenes (filtro)", f"{int(k['orders']):,}")
-st.sidebar.metric("Revenue (filtro)", f"${float(k['revenue']):,.0f}")
+st.sidebar.metric(t("orders_filter"), f"{int(k['orders']):,}")
+st.sidebar.metric(t("revenue_filter"), f"${float(k['revenue']):,.0f}")
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Resumen ejecutivo", "Tendencia temporal", "Segmentación", "Insights & Acciones", "🤖 Asistente"]
+    [t("tab_summary"), t("tab_trend"), t("tab_segment"), t("tab_insights"), t("tab_assistant")]
 )
 
 # =========================================================================== #
 # TAB 1 — Resumen ejecutivo
 # =========================================================================== #
 with tab1:
-    st.subheader("Indicadores clave")
+    st.subheader(t("key_indicators"))
     c1, c2, c3, c4 = st.columns(4)
-    kpi_card(c1, "Revenue", f"${float(k['revenue']):,.0f}", "Facturación total")
-    kpi_card(c2, "Profit", f"${float(k['profit']):,.0f}", f"Margen {float(k['margin_pct']):.1f}%")
-    kpi_card(c3, "Órdenes", f"{int(k['orders']):,}", f"{int(k['customers']):,} clientes")
-    kpi_card(c4, "Ticket promedio", f"${float(k['aov']):,.2f}", "Order Amount medio")
+    kpi_card(c1, t("kpi_revenue"), f"${float(k['revenue']):,.0f}", t("kpi_revenue_sub"))
+    kpi_card(c2, t("kpi_profit"), f"${float(k['profit']):,.0f}", f"{t('kpi_margin')} {float(k['margin_pct']):.1f}%")
+    _customers = "clientes" if LANG == "es" else "customers"
+    kpi_card(c3, t("kpi_orders"), f"{int(k['orders']):,}", f"{int(k['customers']):,} {_customers}")
+    kpi_card(c4, t("kpi_aov"), f"${float(k['aov']):,.2f}", t("kpi_aov_sub"))
 
     c5, c6, c7, c8 = st.columns(4)
-    kpi_card(c5, "Tasa de devolución", f"{float(k['return_rate']):.1f}%", "Órdenes devueltas")
-    kpi_card(c6, "Rating medio", f"{float(k['rating']):.2f} / 5", "Satisfacción")
-    kpi_card(c7, "Margen", f"{float(k['margin_pct']):.1f}%", "Profit / Revenue")
-    kpi_card(
-        c8, "Revenue / cliente",
-        f"${float(k['revenue'])/max(int(k['customers']),1):,.0f}", "Promedio",
-    )
+    kpi_card(c5, t("kpi_return"), f"{float(k['return_rate']):.1f}%", t("kpi_return_sub"))
+    kpi_card(c6, t("kpi_rating"), f"{float(k['rating']):.2f} / 5", t("kpi_rating_sub"))
+    kpi_card(c7, t("kpi_margin"), f"{float(k['margin_pct']):.1f}%", "Profit / Revenue")
+    kpi_card(c8, t("kpi_rev_cust"), f"${float(k['revenue'])/max(int(k['customers']),1):,.0f}", t("kpi_avg"))
 
     st.divider()
     left, right = st.columns(2)
@@ -275,48 +384,38 @@ with tab1:
                 GROUP BY product_category ORDER BY revenue DESC""",
             params,
         )
-        fig = px.bar(
-            cat, x="revenue", y="categoria", orientation="h",
-            title="<b>Revenue por categoría</b>", color="revenue",
-            color_continuous_scale="Teal", text="revenue",
-        )
+        fig = px.bar(cat, x="revenue", y="categoria", orientation="h",
+                     title=f"<b>{t('chart_rev_cat')}</b>", color="revenue",
+                     color_continuous_scale="Teal", text="revenue")
         fig.update_traces(texttemplate="$%{text:,.0f}", textposition="outside")
-        fig.update_layout(
-            yaxis={"categoryorder": "total ascending"}, height=430,
-            coloraxis_showscale=False, margin=dict(l=10, r=10, t=50, b=10),
-        )
+        fig.update_layout(yaxis={"categoryorder": "total ascending"}, height=430,
+                          coloraxis_showscale=False, margin=dict(l=10, r=10, t=50, b=10))
         st.plotly_chart(fig, width="stretch")
 
     with right:
         country = q(
-            f"""SELECT country AS pais,
-                       ROUND(SUM(order_amount),2) AS revenue
+            f"""SELECT country AS pais, ROUND(SUM(order_amount),2) AS revenue
                 FROM orders {where}
                 GROUP BY country ORDER BY revenue DESC LIMIT 10""",
             params,
         )
-        fig = px.bar(
-            country, x="pais", y="revenue", title="<b>Top 10 países por revenue</b>",
-            color="revenue", color_continuous_scale="Teal", text="revenue",
-        )
+        fig = px.bar(country, x="pais", y="revenue", title=f"<b>{t('chart_top_countries')}</b>",
+                     color="revenue", color_continuous_scale="Teal", text="revenue")
         fig.update_traces(texttemplate="$%{text:,.0s}", textposition="outside")
         fig.update_layout(height=430, coloraxis_showscale=False, margin=dict(l=10, r=10, t=50, b=10))
         st.plotly_chart(fig, width="stretch")
 
     seg = q(
-        f"""SELECT customer_segment AS segmento,
-                   COUNT(*) AS orders,
+        f"""SELECT customer_segment AS segmento, COUNT(*) AS orders,
                    ROUND(SUM(order_amount),2) AS revenue,
                    ROUND(100.0*SUM(profit_amount)/NULLIF(SUM(order_amount),0),2) AS margin_pct
             FROM orders {where}
             GROUP BY customer_segment ORDER BY revenue DESC""",
         params,
     )
-    fig = px.bar(
-        seg, x="segmento", y="revenue", color="margin_pct",
-        title="<b>Revenue por segmento de cliente (color = margen %)</b>",
-        color_continuous_scale="RdYlGn", text="revenue",
-    )
+    fig = px.bar(seg, x="segmento", y="revenue", color="margin_pct",
+                 title=f"<b>{t('chart_rev_segment')}</b>",
+                 color_continuous_scale="RdYlGn", text="revenue")
     fig.update_traces(texttemplate="$%{text:,.0s}", textposition="outside")
     fig.update_layout(height=400, margin=dict(l=10, r=10, t=50, b=10))
     st.plotly_chart(fig, width="stretch")
@@ -325,7 +424,7 @@ with tab1:
 # TAB 2 — Tendencia temporal
 # =========================================================================== #
 with tab2:
-    st.subheader("Evolución mensual")
+    st.subheader(t("monthly_evo"))
     trend = q(
         f"""SELECT year, month,
                    ROUND(SUM(order_amount),2) AS revenue,
@@ -337,68 +436,51 @@ with tab2:
         params,
     )
     trend["periodo"] = (
-        trend["year"].astype(int).astype(str)
-        + "-"
+        trend["year"].astype(int).astype(str) + "-"
         + trend["month"].astype(int).astype(str).str.zfill(2)
     )
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_trace(
-        go.Bar(x=trend["periodo"], y=trend["revenue"], name="Revenue",
-               marker_color="#2E86AB", opacity=0.85),
-        secondary_y=False,
-    )
-    fig.add_trace(
-        go.Scatter(x=trend["periodo"], y=trend["profit"], name="Profit",
-                   mode="lines+markers", line=dict(color="#06A77D", width=3)),
-        secondary_y=True,
-    )
-    fig.update_layout(
-        title="<b>Revenue y Profit por mes</b>", height=460, hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=10, r=10, t=60, b=10),
-    )
+    fig.add_trace(go.Bar(x=trend["periodo"], y=trend["revenue"], name=t("kpi_revenue"),
+                         marker_color="#2E86AB", opacity=0.85), secondary_y=False)
+    fig.add_trace(go.Scatter(x=trend["periodo"], y=trend["profit"], name=t("kpi_profit"),
+                             mode="lines+markers", line=dict(color="#06A77D", width=3)), secondary_y=True)
+    fig.update_layout(title=f"<b>{t('rev_profit_month')}</b>", height=460, hovermode="x unified",
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                      margin=dict(l=10, r=10, t=60, b=10))
     fig.update_yaxes(title_text="Revenue ($)", secondary_y=False)
     fig.update_yaxes(title_text="Profit ($)", secondary_y=True)
     st.plotly_chart(fig, width="stretch")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Revenue medio/mes", f"${trend['revenue'].mean():,.0f}")
+    c1.metric(t("avg_rev_month"), f"${trend['revenue'].mean():,.0f}")
     best = trend.loc[trend["revenue"].idxmax()]
     worst = trend.loc[trend["revenue"].idxmin()]
-    c2.metric("Mejor mes", best["periodo"], f"${float(best['revenue']):,.0f}")
-    c3.metric("Peor mes", worst["periodo"], f"${float(worst['revenue']):,.0f}")
-    c4.metric("Órdenes medias/mes", f"{trend['orders'].mean():,.0f}")
+    c2.metric(t("best_month"), best["periodo"], f"${float(best['revenue']):,.0f}")
+    c3.metric(t("worst_month"), worst["periodo"], f"${float(worst['revenue']):,.0f}")
+    c4.metric(t("avg_orders_month"), f"{trend['orders'].mean():,.0f}")
 
     st.divider()
-    st.subheader("Órdenes y ticket promedio")
+    st.subheader(t("orders_ticket"))
     fig2 = make_subplots(specs=[[{"secondary_y": True}]])
-    fig2.add_trace(
-        go.Bar(x=trend["periodo"], y=trend["orders"], name="Órdenes", marker_color="#A23B72", opacity=0.7),
-        secondary_y=False,
-    )
-    fig2.add_trace(
-        go.Scatter(x=trend["periodo"], y=trend["aov"], name="Ticket promedio",
-                   mode="lines+markers", line=dict(color="#F18F01", width=3)),
-        secondary_y=True,
-    )
-    fig2.update_layout(
-        height=400, hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=10, r=10, t=30, b=10),
-    )
-    fig2.update_yaxes(title_text="Órdenes", secondary_y=False)
-    fig2.update_yaxes(title_text="Ticket ($)", secondary_y=True)
+    fig2.add_trace(go.Bar(x=trend["periodo"], y=trend["orders"], name=t("orders_by_stage"),
+                          marker_color="#A23B72", opacity=0.7), secondary_y=False)
+    fig2.add_trace(go.Scatter(x=trend["periodo"], y=trend["aov"], name=t("avg_ticket"),
+                              mode="lines+markers", line=dict(color="#F18F01", width=3)), secondary_y=True)
+    fig2.update_layout(height=400, hovermode="x unified",
+                       legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                       margin=dict(l=10, r=10, t=30, b=10))
+    fig2.update_yaxes(title_text=t("orders_by_stage"), secondary_y=False)
+    fig2.update_yaxes(title_text=t("ticket_axis"), secondary_y=True)
     st.plotly_chart(fig2, width="stretch")
 
 # =========================================================================== #
-# TAB 3 — Segmentación (device × género, al estilo del dashboard de referencia)
+# TAB 3 — Segmentación (device × género)
 # =========================================================================== #
 with tab3:
-    st.subheader("Distribución de usuarios")
+    st.subheader(t("user_dist"))
     dg = q(
-        f"""SELECT device_type, customer_gender,
-                   COUNT(*) AS orders,
+        f"""SELECT device_type, customer_gender, COUNT(*) AS orders,
                    ROUND(SUM(order_amount),2) AS revenue,
                    ROUND(AVG(order_amount),2) AS aov,
                    ROUND(100.0*SUM(profit_amount)/NULLIF(SUM(order_amount),0),2) AS margin_pct,
@@ -412,42 +494,39 @@ with tab3:
     with c1:
         gdist = dg.groupby("customer_gender", as_index=False)["orders"].sum()
         fig = px.pie(gdist, values="orders", names="customer_gender", hole=0.45,
-                     title="<b>Órdenes por género</b>", color_discrete_sequence=PALETTE)
+                     title=f"<b>{t('orders_by_gender')}</b>", color_discrete_sequence=PALETTE)
         fig.update_traces(textposition="inside", textinfo="percent+label")
         fig.update_layout(height=360, margin=dict(l=10, r=10, t=50, b=10))
         st.plotly_chart(fig, width="stretch")
     with c2:
         ddist = dg.groupby("device_type", as_index=False)["orders"].sum()
         fig = px.pie(ddist, values="orders", names="device_type", hole=0.45,
-                     title="<b>Órdenes por dispositivo</b>", color_discrete_sequence=PALETTE[2:])
+                     title=f"<b>{t('orders_by_device')}</b>", color_discrete_sequence=PALETTE[2:])
         fig.update_traces(textposition="inside", textinfo="percent+label")
         fig.update_layout(height=360, margin=dict(l=10, r=10, t=50, b=10))
         st.plotly_chart(fig, width="stretch")
 
     st.divider()
-    st.subheader("Heatmaps: dispositivo × género")
+    st.subheader(t("heatmaps_dg"))
 
     def heatmap(metric: str, title: str, scale: str, fmt: str):
         pivot = dg.pivot(index="device_type", columns="customer_gender", values=metric)
-        fig = go.Figure(
-            go.Heatmap(
-                z=pivot.values, x=list(pivot.columns), y=list(pivot.index),
-                text=pivot.values, texttemplate=fmt, textfont={"size": 13},
-                colorscale=scale, colorbar=dict(title=""),
-            )
-        )
+        fig = go.Figure(go.Heatmap(
+            z=pivot.values, x=list(pivot.columns), y=list(pivot.index),
+            text=pivot.values, texttemplate=fmt, textfont={"size": 13},
+            colorscale=scale, colorbar=dict(title="")))
         fig.update_layout(title=f"<b>{title}</b>", height=330, margin=dict(l=10, r=10, t=50, b=10))
         return fig
 
     h1, h2 = st.columns(2)
-    h1.plotly_chart(heatmap("revenue", "Revenue", "Teal", "$%{text:,.0f}"), width="stretch")
-    h2.plotly_chart(heatmap("margin_pct", "Margen %", "RdYlGn", "%{text:.1f}%"), width="stretch")
+    h1.plotly_chart(heatmap("revenue", t("hm_revenue"), "Teal", "$%{text:,.0f}"), width="stretch")
+    h2.plotly_chart(heatmap("margin_pct", t("hm_margin"), "RdYlGn", "%{text:.1f}%"), width="stretch")
     h3, h4 = st.columns(2)
-    h3.plotly_chart(heatmap("aov", "Ticket promedio", "Blues", "$%{text:,.0f}"), width="stretch")
-    h4.plotly_chart(heatmap("return_rate", "Tasa de devolución %", "Reds", "%{text:.1f}%"), width="stretch")
+    h3.plotly_chart(heatmap("aov", t("hm_aov"), "Blues", "$%{text:,.0f}"), width="stretch")
+    h4.plotly_chart(heatmap("return_rate", t("hm_return"), "Reds", "%{text:.1f}%"), width="stretch")
 
     st.divider()
-    st.subheader("Canales y métodos de pago")
+    st.subheader(t("channels_payments"))
     c1, c2 = st.columns(2)
     with c1:
         ch = q(
@@ -455,7 +534,7 @@ with tab3:
                 FROM orders {where} GROUP BY traffic_source ORDER BY revenue DESC""",
             params,
         )
-        fig = px.bar(ch, x="revenue", y="canal", orientation="h", title="<b>Revenue por canal de tráfico</b>",
+        fig = px.bar(ch, x="revenue", y="canal", orientation="h", title=f"<b>{t('rev_by_channel')}</b>",
                      color="revenue", color_continuous_scale="Teal", text="revenue")
         fig.update_traces(texttemplate="$%{text:,.0s}", textposition="outside")
         fig.update_layout(yaxis={"categoryorder": "total ascending"}, height=380,
@@ -467,7 +546,7 @@ with tab3:
                 FROM orders {where} GROUP BY payment_method ORDER BY orders DESC""",
             params,
         )
-        fig = px.bar(pm, x="metodo", y="orders", title="<b>Órdenes por método de pago</b>",
+        fig = px.bar(pm, x="metodo", y="orders", title=f"<b>{t('orders_by_payment')}</b>",
                      color="orders", color_continuous_scale="Teal", text="orders")
         fig.update_traces(textposition="outside")
         fig.update_layout(height=380, coloraxis_showscale=False, margin=dict(l=10, r=10, t=50, b=10),
@@ -478,7 +557,10 @@ with tab3:
 # TAB 4 — Insights & Acciones
 # =========================================================================== #
 with tab4:
-    st.subheader("Segmentos device × género (por revenue)")
+    st.subheader(t("seg_by_revenue"))
+    ordn = "órdenes" if LANG == "es" else "orders"
+    ret_lbl = "Devol." if LANG == "es" else "Ret."
+    mar_lbl = "Margen" if LANG == "es" else "Margin"
     dg2 = q(
         f"""SELECT device_type || ' - ' || customer_gender AS segmento,
                    COUNT(*) AS orders,
@@ -495,26 +577,26 @@ with tab4:
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("#### Top segmentos")
+        st.markdown(f"#### {t('top_segments')}")
         for _, r in top.iterrows():
             st.markdown(
                 f'<div class="action-box"><h4>{r["segmento"]}</h4>'
-                f'<p>Revenue <b>${float(r["revenue"]):,.0f}</b> · Margen <b>{float(r["margin_pct"]):.1f}%</b> · '
-                f'Devol. {float(r["return_rate"]):.1f}% · {int(r["orders"]):,} órdenes</p></div>',
+                f'<p>Revenue <b>${float(r["revenue"]):,.0f}</b> · {mar_lbl} <b>{float(r["margin_pct"]):.1f}%</b> · '
+                f'{ret_lbl} {float(r["return_rate"]):.1f}% · {int(r["orders"]):,} {ordn}</p></div>',
                 unsafe_allow_html=True,
             )
     with c2:
-        st.markdown("#### Segmentos de menor revenue")
+        st.markdown(f"#### {t('low_segments')}")
         for _, r in bottom.iterrows():
             st.markdown(
                 f'<div class="warning-box"><h4>{r["segmento"]}</h4>'
-                f'<p>Revenue <b>${float(r["revenue"]):,.0f}</b> · Margen <b>{float(r["margin_pct"]):.1f}%</b> · '
-                f'Devol. {float(r["return_rate"]):.1f}% · {int(r["orders"]):,} órdenes</p></div>',
+                f'<p>Revenue <b>${float(r["revenue"]):,.0f}</b> · {mar_lbl} <b>{float(r["margin_pct"]):.1f}%</b> · '
+                f'{ret_lbl} {float(r["return_rate"]):.1f}% · {int(r["orders"]):,} {ordn}</p></div>',
                 unsafe_allow_html=True,
             )
 
     st.divider()
-    st.subheader("Categorías por rentabilidad")
+    st.subheader(t("cat_profit"))
     catm = q(
         f"""SELECT product_category AS categoria,
                    ROUND(SUM(order_amount),2) AS revenue,
@@ -525,25 +607,24 @@ with tab4:
             GROUP BY product_category ORDER BY profit DESC""",
         params,
     )
-    fig = px.scatter(
-        catm, x="revenue", y="margin_pct", size="profit", color="return_rate",
-        hover_name="categoria", color_continuous_scale="RdYlGn_r", size_max=55,
-        title="<b>Revenue vs Margen por categoría (tamaño = profit, color = devolución %)</b>",
-        labels={"revenue": "Revenue ($)", "margin_pct": "Margen %", "return_rate": "Devolución %"},
-    )
+    fig = px.scatter(catm, x="revenue", y="margin_pct", size="profit", color="return_rate",
+                     hover_name="categoria", color_continuous_scale="RdYlGn_r", size_max=55,
+                     title=f"<b>{t('scatter_title')}</b>",
+                     labels={"revenue": t("lbl_revenue"), "margin_pct": t("lbl_margin"),
+                             "return_rate": t("lbl_return")})
     fig.update_layout(height=470, margin=dict(l=10, r=10, t=60, b=10))
     st.plotly_chart(fig, width="stretch")
 
     top_cat = catm.iloc[0]
     worst_ret = catm.sort_values("return_rate", ascending=False).iloc[0]
     st.markdown(
-        f'<div class="insight-box"><h4>Lectura rápida</h4><ul>'
-        f'<li>Categoría más rentable: <b>{top_cat["categoria"]}</b> '
-        f'(${float(top_cat["profit"]):,.0f} de profit, margen {float(top_cat["margin_pct"]):.1f}%).</li>'
-        f'<li>Mayor tasa de devolución: <b>{worst_ret["categoria"]}</b> '
-        f'({float(worst_ret["return_rate"]):.1f}%) — revisar calidad, tallas o descripción.</li>'
-        f'<li>Margen global del filtro: <b>{float(k["margin_pct"]):.1f}%</b> '
-        f'sobre ${float(k["revenue"]):,.0f} de revenue.</li>'
+        f'<div class="insight-box"><h4>{t("quick_read")}</h4><ul>'
+        f'<li>{t("most_profitable")}: <b>{top_cat["categoria"]}</b> '
+        f'(${float(top_cat["profit"]):,.0f} {t("of_profit_margin")} {float(top_cat["margin_pct"]):.1f}%).</li>'
+        f'<li>{t("highest_return")}: <b>{worst_ret["categoria"]}</b> '
+        f'({float(worst_ret["return_rate"]):.1f}%) — {t("review_quality")}.</li>'
+        f'<li>{t("overall_margin")}: <b>{float(k["margin_pct"]):.1f}%</b> '
+        f'{t("over_revenue")} ${float(k["revenue"]):,.0f} {t("of_revenue")}.</li>'
         f'</ul></div>',
         unsafe_allow_html=True,
     )
@@ -552,17 +633,11 @@ with tab4:
 # TAB 5 — Asistente conversacional (agente MCP embebido en el proceso)
 # =========================================================================== #
 with tab5:
-    st.subheader("Asistente conversacional")
-    st.caption(
-        "Agente LangChain (vía OpenRouter) que consulta los mismos datos a través "
-        "del MCP de datos, en el mismo proceso del dashboard."
-    )
+    st.subheader(t("assistant_title"))
+    st.caption(t("assistant_caption"))
 
     if not os.getenv("OPENROUTER_API_KEY"):
-        st.warning(
-            "Configura el secret **OPENROUTER_API_KEY** (Settings → Secrets) "
-            "para habilitar el asistente."
-        )
+        st.warning(t("assistant_nokey"))
     else:
         if "chat_msgs" not in st.session_state:
             st.session_state.chat_msgs = []
@@ -574,46 +649,41 @@ with tab5:
                 st.markdown(m["content"])
 
         with st.form("chat_form", clear_on_submit=True):
-            pregunta = st.text_input(
-                "Pregunta al agente",
-                placeholder="Ej.: ¿Qué país genera más utilidad en 2024?",
-            )
-            enviar = st.form_submit_button("Enviar")
+            pregunta = st.text_input(t("ask_agent"), placeholder=t("ask_placeholder"))
+            enviar = st.form_submit_button(t("send"))
 
         if enviar and pregunta.strip():
             st.session_state.chat_msgs.append({"role": "user", "content": pregunta})
             with st.chat_message("user"):
                 st.markdown(pregunta)
 
+            # Ajusta el idioma de la respuesta del agente según el toggle.
+            mensaje = pregunta if LANG == "es" else pregunta + "\n\n[Please answer in English.]"
+
             traza = None
             with st.chat_message("assistant"):
-                with st.spinner("El agente consulta los datos vía MCP..."):
+                with st.spinner(t("agent_spinner")):
                     try:
                         ensure_data_mcp()
                         from agent_core import resolver_consulta
 
                         res = asyncio.run(
-                            resolver_consulta(
-                                pregunta, st.session_state.chat_sid, canal="dashboard"
-                            )
+                            resolver_consulta(mensaje, st.session_state.chat_sid, canal="dashboard")
                         )
                         answer = res["respuesta"]
                         traza = res.get("traza")
                     except Exception as exc:  # noqa: BLE001
-                        answer = f"No fue posible responder: {exc}"
+                        answer = f"{t('agent_error')}: {exc}"
                 st.markdown(answer)
 
             st.session_state.chat_msgs.append({"role": "assistant", "content": answer})
             if traza:
-                with st.expander("Traza de orquestación (tools MCP invocadas)"):
+                with st.expander(t("agent_trace")):
                     st.json(traza)
 
-        if st.session_state.chat_msgs and st.button("Nueva conversación"):
+        if st.session_state.chat_msgs and st.button(t("new_chat")):
             st.session_state.chat_msgs = []
             st.session_state.chat_sid = "dash-" + uuid.uuid4().hex[:8]
             st.rerun()
 
-st.caption(
-    f"Portal BI E-commerce · backend: {backend_activo()} · "
-    "datos de uso técnico/pedagógico."
-)
+st.caption(t("footer").format(b=backend_activo()))

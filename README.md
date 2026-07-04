@@ -176,7 +176,7 @@ Reutiliza el patrón visual del caso de referencia (tabs, tarjetas, heatmaps dev
 | Insights & Acciones | Top/bottom segmentos; scatter revenue-vs-margen por categoría; lectura rápida |
 | 🤖 Asistente | Agente MCP conversacional **embebido en el mismo proceso** (in-process) sobre los mismos datos |
 
-Incluye filtros por año y país en la barra lateral. La pestaña Asistente levanta `mcp_datos.py` como subproceso local y corre el agente in-process, así que un solo deploy de Streamlit ofrece dashboard + chat. Guía de despliegue: [docs/DEPLOY_STREAMLIT.md](docs/DEPLOY_STREAMLIT.md).
+Incluye filtros por año y país, y un **toggle de idioma Español / English** en la barra lateral que traduce toda la interfaz y hace que el asistente responda en el idioma elegido. La pestaña Asistente levanta `mcp_datos.py` como subproceso local y corre el agente in-process, así que un solo deploy de Streamlit ofrece dashboard + chat. Guía de despliegue: [docs/DEPLOY_STREAMLIT.md](docs/DEPLOY_STREAMLIT.md).
 
 > **Selección de backend (importante para desplegar):** basta definir `DATABASE_URL` (secret) para que la app use Supabase automáticamente; no hace falta `DB_BACKEND`. Esto evita el fallo de caer a SQLite en la nube (donde no existe el `.db`).
 
