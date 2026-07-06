@@ -187,6 +187,8 @@ T: dict[str, dict[str, str]] = {
     "agent_trace": {"es": "Traza de orquestación (tools MCP invocadas)",
                     "en": "Orchestration trace (MCP tools invoked)"},
     "new_chat": {"es": "Nueva conversación", "en": "New conversation"},
+    "mem_title": {"es": "Memoria del agente (corto + largo plazo)", "en": "Agent memory (short + long term)"},
+    "mem_recalled": {"es": "Recuerdos recuperados (largo plazo)", "en": "Recalled memories (long term)"},
     "footer": {"es": "Portal BI E-commerce · backend: {b} · datos de uso técnico/pedagógico.",
                "en": "E-commerce BI Portal · backend: {b} · technical/educational data."},
     # FP&A
@@ -893,7 +895,7 @@ with tab6:
             # Ajusta el idioma de la respuesta del agente según el toggle.
             mensaje = pregunta if LANG == "es" else pregunta + "\n\n[Please answer in English.]"
 
-            traza = None
+            traza = memoria = recuerdos = None
             with st.chat_message("assistant"):
                 with st.spinner(t("agent_spinner")):
                     try:
@@ -905,11 +907,19 @@ with tab6:
                         )
                         answer = res["respuesta"]
                         traza = res.get("traza")
+                        memoria = res.get("memoria")
+                        recuerdos = res.get("recuerdos")
                     except Exception as exc:  # noqa: BLE001
                         answer = f"{t('agent_error')}: {exc}"
                 st.markdown(answer)
 
             st.session_state.chat_msgs.append({"role": "assistant", "content": answer})
+            if memoria:
+                with st.expander(t("mem_title")):
+                    st.json(memoria)
+                    if recuerdos:
+                        st.caption(t("mem_recalled"))
+                        st.json(recuerdos)
             if traza:
                 with st.expander(t("agent_trace")):
                     st.json(traza)

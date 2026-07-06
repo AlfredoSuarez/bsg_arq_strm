@@ -8,6 +8,7 @@ Portal BI de e-commerce operativo, con agente conversacional y dashboard sobre l
 - **Dashboard BI bilingüe (`dashboard.py`)**: Streamlit + Plotly, 6 pestañas (Resumen, Tendencia, Segmentación device×género, Insights, **FP&A**, Asistente) con toggle **Español / English**.
 - **Módulo FP&A (`fpa.py`)**: P&L ejecutivo (EBITDA, margen, YoY), Budget vs Actual, Rolling Forecast, Escenarios & Sensibilidad interactivos y Recurring Revenue (MRR/ARR por tier). Actuals reales; budget/forecast/recurring modelados con supuestos explícitos.
 - **Agente MCP embebido**: la pestaña Asistente corre el agente in-process (levanta `mcp_datos.py` como subproceso), así un solo deploy ofrece dashboard + chat. 12 tools MCP (7 de negocio + 5 FP&A).
+- **Memoria en dos niveles (`memory.py`)**: corto plazo (`InMemorySaver`, en proceso) + **largo plazo durable en Supabase/pgvector** (`agent_memory`): persiste cada turno y recupera contexto relevante entre sesiones — recall **semántico** (pgvector) si hay embeddings, o **léxico** (full-text español) por defecto. Degrada a solo-corto-plazo con SQLite.
 - **Desplegado en Streamlit Community Cloud** contra Supabase (transaction pooler, puerto 6543).
 
 Guías: [docs/BACKEND_SUPABASE.md](docs/BACKEND_SUPABASE.md) · [docs/DEPLOY_STREAMLIT.md](docs/DEPLOY_STREAMLIT.md)

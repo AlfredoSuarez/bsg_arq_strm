@@ -26,6 +26,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.runtime import Runtime
 
+import memory as longterm
+
 load_dotenv()
 
 MODEL_NAME = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
@@ -97,17 +99,30 @@ def _crear_modelo() -> ChatOpenAI:
     )
 
 
-async def construir_agente():
-    """Descubre las tools remotas del MCP de datos y arma el agente LangChain."""
+async def construir_agente(memoria_contexto: str = ""):
+    """Descubre las tools remotas del MCP de datos y arma el agente LangChain.
+
+    memoria_contexto: recuerdos de largo plazo (Supabase/pgvector) a inyectar en el
+    system prompt para dar continuidad entre sesiones.
+    """
     client = MultiServerMCPClient(
         {"ecommerce": {"transport": "http", "url": DATA_MCP_URL}}
     )
     tools = await client.get_tools()
 
+    system = SYSTEM_PROMPT
+    if memoria_contexto:
+        system = (
+            SYSTEM_PROMPT
+            + "\n\nMEMORIA DE LARGO PLAZO (contexto de conversaciones previas; úsala solo si "
+            + "es relevante para la pregunta actual, no la repitas literalmente):\n"
+            + memoria_contexto
+        )
+
     agent = create_agent(
         model=_crear_modelo(),
         tools=tools,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system,
         checkpointer=CHECKPOINTER,
         middleware=[ventana_contexto],
     )
@@ -147,13 +162,20 @@ async def resolver_consulta(
     canal: str = "web",
 ) -> dict:
     """Ejecuta una interacción completa y vincula turnos mediante session_id."""
-    agent = await construir_agente()
+    # Memoria de largo plazo: recupera contexto relevante antes de responder.
+    recuerdos = longterm.recall(session_id, mensaje)
+    agent = await construir_agente(longterm.format_context(recuerdos))
     result = await agent.ainvoke(
         {"messages": [{"role": "user", "content": mensaje}]},
         {"configurable": {"thread_id": session_id, "canal": canal}},
     )
 
     messages = result["messages"]
+    respuesta_final = _texto_final(messages)
+
+    # Persiste el turno (durable, cross-sesión). Best-effort: no rompe la respuesta.
+    longterm.save_turn(session_id, canal, "user", mensaje)
+    longterm.save_turn(session_id, canal, "assistant", respuesta_final)
     user_visible = [
         {
             "rol": "usuario" if getattr(m, "type", "") == "human" else "asistente",
@@ -164,17 +186,27 @@ async def resolver_consulta(
     ]
 
     return {
-        "respuesta": _texto_final(messages),
+        "respuesta": respuesta_final,
         "session_id": session_id,
         "canal": canal,
         "modelo": MODEL_NAME,
         "proveedor": "OpenRouter",
         "memoria": {
-            "tipo": "corto_plazo_en_memoria",
-            "window_messages": WINDOW_MESSAGES,
-            "mensajes_estado": len(messages),
-            "nota": "La conversación persiste solo mientras el proceso esté activo.",
+            "corto_plazo": {
+                "tipo": "InMemorySaver (en proceso)",
+                "window_messages": WINDOW_MESSAGES,
+                "mensajes_estado": len(messages),
+            },
+            "largo_plazo": {
+                "habilitada": longterm.memory_enabled(),
+                "modo_recall": longterm.semantic_mode() if longterm.memory_enabled() else "desactivada",
+                "recuerdos_recuperados": len(recuerdos),
+                "nota": "Persiste en Supabase/pgvector; sobrevive reinicios y cruza sesiones."
+                        if longterm.memory_enabled()
+                        else "Requiere backend Supabase; con SQLite solo hay memoria de corto plazo.",
+            },
         },
+        "recuerdos": recuerdos,
         "traza": _traza(messages),
         "historial_visible": user_visible[-WINDOW_MESSAGES:],
     }
