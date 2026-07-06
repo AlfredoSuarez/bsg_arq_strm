@@ -5,8 +5,9 @@
 Portal BI de e-commerce operativo, con agente conversacional y dashboard sobre los mismos datos:
 
 - **Datos en Supabase (Postgres)**: 30.000 órdenes cargadas · backend conmutable SQLite/Supabase (`db.py`) con auto-detección por `DATABASE_URL`.
-- **Dashboard BI bilingüe (`dashboard.py`)**: Streamlit + Plotly, 5 pestañas (Resumen, Tendencia, Segmentación device×género, Insights, Asistente) con toggle **Español / English**.
-- **Agente MCP embebido**: la pestaña Asistente corre el agente in-process (levanta `mcp_datos.py` como subproceso), así un solo deploy ofrece dashboard + chat.
+- **Dashboard BI bilingüe (`dashboard.py`)**: Streamlit + Plotly, 6 pestañas (Resumen, Tendencia, Segmentación device×género, Insights, **FP&A**, Asistente) con toggle **Español / English**.
+- **Módulo FP&A (`fpa.py`)**: P&L ejecutivo (EBITDA, margen, YoY), Budget vs Actual, Rolling Forecast, Escenarios & Sensibilidad interactivos y Recurring Revenue (MRR/ARR por tier). Actuals reales; budget/forecast/recurring modelados con supuestos explícitos.
+- **Agente MCP embebido**: la pestaña Asistente corre el agente in-process (levanta `mcp_datos.py` como subproceso), así un solo deploy ofrece dashboard + chat. 12 tools MCP (7 de negocio + 5 FP&A).
 - **Desplegado en Streamlit Community Cloud** contra Supabase (transaction pooler, puerto 6543).
 
 Guías: [docs/BACKEND_SUPABASE.md](docs/BACKEND_SUPABASE.md) · [docs/DEPLOY_STREAMLIT.md](docs/DEPLOY_STREAMLIT.md)
@@ -165,6 +166,20 @@ La guía completa (esquema, `DATABASE_URL`, pooler, RLS y pgvector) está en [do
 | `detalle_orden` | Recupera el detalle de una orden específica | `Order_ID` y atributos de la transacción |
 
 No existe una tool genérica como `ejecutar_sql(sql)`. Esa decisión protege la base, vuelve visible la lógica de negocio y facilita que el LLM elija la herramienta correcta.
+
+### Tools FP&A (financieras)
+
+Robustecen al agente con capacidades de analista financiero (capa `fpa.py`):
+
+| Tool | Capacidad |
+|---|---|
+| `kpi_ejecutivo` | P&L ejecutivo: revenue, COGS, margen, OpEx, EBITDA, growth YoY |
+| `variacion_presupuestal` | Actual vs budget mensual (variación $ y %) |
+| `forecast_ingresos` | Rolling forecast de ingresos (N meses) |
+| `escenario` | What-if sobre el P&L (crecimiento, margen, OpEx) e impacto en EBITDA |
+| `ingreso_recurrente` | MRR/ARR/ARPU por tier de membresía |
+
+**Supuestos declarados** (en `fpa.py`): budget = año previo del mismo mes +10%, margen meta 21%, OpEx = 18% de revenue, EBITDA = utilidad bruta − OpEx, cuotas Silver/Gold/Platinum = $5/$12/$25. Los *actuals* son agregación real de `orders`; budget/forecast/recurring se **modelan** (transparencia FP&A).
 
 ## Dashboard BI
 

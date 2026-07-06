@@ -53,6 +53,7 @@ def _bridge_secrets() -> None:
 _bridge_secrets()
 
 from db import backend_activo, run_query  # noqa: E402 - tras configurar el entorno
+import fpa  # noqa: E402 - capa FP&A (usa la misma db conmutable)
 
 REPO_DIR = Path(__file__).parent
 DATA_MCP_HOST, DATA_MCP_PORT = "127.0.0.1", 8000
@@ -188,6 +189,55 @@ T: dict[str, dict[str, str]] = {
     "new_chat": {"es": "Nueva conversación", "en": "New conversation"},
     "footer": {"es": "Portal BI E-commerce · backend: {b} · datos de uso técnico/pedagógico.",
                "en": "E-commerce BI Portal · backend: {b} · technical/educational data."},
+    # FP&A
+    "tab_fpa": {"es": "💼 FP&A", "en": "💼 FP&A"},
+    "fpa_year": {"es": "Año", "en": "Year"},
+    "fpa_all": {"es": "Todos", "en": "All"},
+    "fpa_note": {"es": "FP&A a nivel compañía (no aplica el filtro de país). Actuals reales; budget/forecast/recurring modelados.",
+                 "en": "Company-wide FP&A (country filter not applied). Real actuals; budget/forecast/recurring are modeled."},
+    "sub_pl": {"es": "P&L ejecutivo", "en": "Executive P&L"},
+    "sub_bva": {"es": "Budget vs Actual", "en": "Budget vs Actual"},
+    "sub_forecast": {"es": "Forecast", "en": "Forecast"},
+    "sub_scenario": {"es": "Escenarios", "en": "Scenarios"},
+    "sub_recurring": {"es": "Recurring Revenue", "en": "Recurring Revenue"},
+    "pl_gp": {"es": "Utilidad bruta", "en": "Gross Profit"},
+    "pl_margin": {"es": "Margen bruto", "en": "Gross margin"},
+    "pl_ebitda": {"es": "EBITDA", "en": "EBITDA"},
+    "pl_ebitda_margin": {"es": "Margen EBITDA", "en": "EBITDA margin"},
+    "pl_yoy": {"es": "Crecimiento YoY", "en": "YoY growth"},
+    "pl_cogs": {"es": "COGS", "en": "COGS"},
+    "pl_assumptions": {"es": "Supuestos: OpEx {opex}% de revenue · budget = año previo +{g}% · margen meta {mt}% · EBITDA = Utilidad bruta − OpEx.",
+                       "en": "Assumptions: OpEx {opex}% of revenue · budget = prior year +{g}% · target margin {mt}% · EBITDA = Gross Profit − OpEx."},
+    "pl_monthly": {"es": "Revenue y utilidad bruta por mes", "en": "Revenue and gross profit by month"},
+    "bva_title": {"es": "Actual vs Budget — revenue mensual", "en": "Actual vs Budget — monthly revenue"},
+    "bva_variance": {"es": "Variación vs budget (%)", "en": "Variance vs budget (%)"},
+    "bva_actual": {"es": "Actual", "en": "Actual"},
+    "bva_budget": {"es": "Budget", "en": "Budget"},
+    "bva_total_actual": {"es": "Actual total", "en": "Total actual"},
+    "bva_total_budget": {"es": "Budget total", "en": "Total budget"},
+    "bva_var": {"es": "Variación", "en": "Variance"},
+    "bva_none": {"es": "No hay budget para este año (el modelo requiere el año previo).",
+                 "en": "No budget for this year (the model requires the prior year)."},
+    "fc_horizon": {"es": "Horizonte (meses)", "en": "Horizon (months)"},
+    "fc_title": {"es": "Ingresos: histórico + rolling forecast", "en": "Revenue: history + rolling forecast"},
+    "fc_hist": {"es": "Histórico (actual)", "en": "History (actual)"},
+    "fc_fore": {"es": "Forecast", "en": "Forecast"},
+    "sc_growth": {"es": "Crecimiento de ingresos %", "en": "Revenue growth %"},
+    "sc_margin": {"es": "Margen bruto objetivo %", "en": "Target gross margin %"},
+    "sc_opex": {"es": "OpEx (% de revenue)", "en": "OpEx (% of revenue)"},
+    "sc_base_rev": {"es": "Revenue base", "en": "Base revenue"},
+    "sc_new_rev": {"es": "Revenue escenario", "en": "Scenario revenue"},
+    "sc_base_ebitda": {"es": "EBITDA base", "en": "Base EBITDA"},
+    "sc_new_ebitda": {"es": "EBITDA escenario", "en": "Scenario EBITDA"},
+    "sc_delta": {"es": "Δ EBITDA vs base", "en": "Δ EBITDA vs base"},
+    "sc_tornado": {"es": "Sensibilidad: impacto en EBITDA (± 5 puntos por driver)",
+                   "en": "Sensitivity: EBITDA impact (± 5 points per driver)"},
+    "rec_mrr": {"es": "MRR", "en": "MRR"},
+    "rec_arr": {"es": "ARR", "en": "ARR"},
+    "rec_paying": {"es": "Miembros de pago", "en": "Paying members"},
+    "rec_arpu": {"es": "ARPU", "en": "ARPU"},
+    "rec_trend": {"es": "MRR mensual por tier de membresía", "en": "Monthly MRR by membership tier"},
+    "rec_bytier": {"es": "MRR por tier (último mes)", "en": "MRR by tier (last month)"},
 }
 
 
@@ -273,6 +323,32 @@ def q(sql: str, params: tuple = ()) -> pd.DataFrame:
     return df
 
 
+# Wrappers cacheados de la capa FP&A (evitan re-consultar en cada rerun).
+@st.cache_data(ttl=600, show_spinner=False)
+def fpa_actuals() -> pd.DataFrame:
+    return fpa.actuals_monthly()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fpa_budget(year: int | None) -> pd.DataFrame:
+    return fpa.budget_vs_actual(year)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fpa_forecast(horizon: int) -> pd.DataFrame:
+    return fpa.forecast(horizon)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fpa_recurring() -> pd.DataFrame:
+    return fpa.recurring_monthly()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fpa_pl(year: int | None) -> dict:
+    return fpa.executive_pl(year)
+
+
 def build_where(years: list[int], countries: list[str]) -> tuple[str, tuple]:
     """Construye un WHERE parametrizado compatible con SQLite y Postgres."""
     clauses: list[str] = []
@@ -350,8 +426,8 @@ k = kpis.iloc[0]
 st.sidebar.metric(t("orders_filter"), f"{int(k['orders']):,}")
 st.sidebar.metric(t("revenue_filter"), f"${float(k['revenue']):,.0f}")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    [t("tab_summary"), t("tab_trend"), t("tab_segment"), t("tab_insights"), t("tab_assistant")]
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    [t("tab_summary"), t("tab_trend"), t("tab_segment"), t("tab_insights"), t("tab_fpa"), t("tab_assistant")]
 )
 
 # =========================================================================== #
@@ -630,9 +706,166 @@ with tab4:
     )
 
 # =========================================================================== #
-# TAB 5 — Asistente conversacional (agente MCP embebido en el proceso)
+# TAB 5 — FP&A (Planeación y Análisis Financiero)
 # =========================================================================== #
 with tab5:
+    st.caption(t("fpa_note"))
+    fa = fpa_actuals()
+    fpa_years = sorted(int(y) for y in fa["year"].unique())
+    f_pl, f_bva, f_fc, f_sc, f_rec = st.tabs(
+        [t("sub_pl"), t("sub_bva"), t("sub_forecast"), t("sub_scenario"), t("sub_recurring")]
+    )
+
+    # ---- P&L ejecutivo ----
+    with f_pl:
+        yopt = [t("fpa_all")] + [str(y) for y in fpa_years]
+        ysel = st.selectbox(t("fpa_year"), yopt, index=len(yopt) - 1, key="pl_year")
+        year = None if ysel == t("fpa_all") else int(ysel)
+        pl = fpa_pl(year)
+        c1, c2, c3, c4 = st.columns(4)
+        kpi_card(c1, t("kpi_revenue"), f"${pl['revenue']:,.0f}", t("kpi_revenue_sub"))
+        kpi_card(c2, t("pl_gp"), f"${pl['gross_profit']:,.0f}", f"{t('pl_margin')} {pl['gross_margin_pct']:.1f}%")
+        kpi_card(c3, t("pl_ebitda"), f"${pl['ebitda']:,.0f}", f"{t('pl_ebitda_margin')} {pl['ebitda_margin_pct']:.1f}%")
+        yoy = pl.get("revenue_growth_yoy_pct")
+        kpi_card(c4, t("pl_yoy"), f"{yoy:+.1f}%" if yoy is not None else "—", t("kpi_revenue"))
+        c5, c6, c7, c8 = st.columns(4)
+        kpi_card(c5, t("pl_cogs"), f"${pl['cogs']:,.0f}", "Revenue − GP")
+        kpi_card(c6, "OpEx", f"${pl['opex']:,.0f}", f"{int(fpa.OPEX_PCT*100)}% revenue")
+        kpi_card(c7, t("kpi_orders"), f"{pl['orders']:,}", "")
+        kpi_card(c8, t("kpi_aov"), f"${pl['aov']:,.2f}", "")
+
+        m = fa if year is None else fa[fa["year"] == year]
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(go.Bar(x=m["period"], y=m["revenue"], name=t("kpi_revenue"),
+                             marker_color="#2E86AB", opacity=0.85), secondary_y=False)
+        fig.add_trace(go.Scatter(x=m["period"], y=m["gross_profit"], name=t("pl_gp"),
+                                 mode="lines+markers", line=dict(color="#06A77D", width=3)), secondary_y=True)
+        fig.update_layout(title=f"<b>{t('pl_monthly')}</b>", height=420, hovermode="x unified",
+                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                          margin=dict(l=10, r=10, t=60, b=10))
+        fig.update_yaxes(title_text="Revenue ($)", secondary_y=False)
+        fig.update_yaxes(title_text="GP ($)", secondary_y=True)
+        st.plotly_chart(fig, width="stretch")
+        st.caption(t("pl_assumptions").format(opex=int(fpa.OPEX_PCT*100), g=int(fpa.GROWTH_BUDGET*100), mt=int(fpa.MARGIN_TARGET*100)))
+
+    # ---- Budget vs Actual ----
+    with f_bva:
+        budget_years = [y for y in fpa_years if (y - 1) in fpa_years]
+        if not budget_years:
+            st.info(t("bva_none"))
+        else:
+            ysel = st.selectbox(t("fpa_year"), [str(y) for y in budget_years],
+                                index=len(budget_years) - 1, key="bva_year")
+            b = fpa_budget(int(ysel))
+            if b.empty:
+                st.info(t("bva_none"))
+            else:
+                ta, tb_ = float(b["revenue"].sum()), float(b["budget_revenue"].sum())
+                c1, c2, c3 = st.columns(3)
+                c1.metric(t("bva_total_actual"), f"${ta:,.0f}")
+                c2.metric(t("bva_total_budget"), f"${tb_:,.0f}")
+                c3.metric(t("bva_var"), f"${ta-tb_:,.0f}", f"{100*(ta-tb_)/tb_:+.1f}%")
+                fig = go.Figure()
+                fig.add_trace(go.Bar(x=b["period"], y=b["budget_revenue"], name=t("bva_budget"), marker_color="#A23B72", opacity=0.6))
+                fig.add_trace(go.Bar(x=b["period"], y=b["revenue"], name=t("bva_actual"), marker_color="#2E86AB"))
+                fig.update_layout(title=f"<b>{t('bva_title')}</b>", barmode="group", height=380,
+                                  legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                                  margin=dict(l=10, r=10, t=60, b=10))
+                st.plotly_chart(fig, width="stretch")
+                colors = ["#06A77D" if v >= 0 else "#E63946" for v in b["var_revenue_pct"]]
+                figv = go.Figure(go.Bar(x=b["period"], y=b["var_revenue_pct"], marker_color=colors,
+                                        text=[f"{v:+.1f}%" for v in b["var_revenue_pct"]], textposition="outside"))
+                figv.update_layout(title=f"<b>{t('bva_variance')}</b>", height=320, margin=dict(l=10, r=10, t=50, b=10))
+                st.plotly_chart(figv, width="stretch")
+
+    # ---- Rolling Forecast ----
+    with f_fc:
+        horizon = st.slider(t("fc_horizon"), 6, 24, 12, key="fc_h")
+        fc = fpa_forecast(horizon)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=fa["period"], y=fa["revenue"], name=t("fc_hist"),
+                                 mode="lines", line=dict(color="#2E86AB", width=2)))
+        fig.add_trace(go.Scatter(x=fc["period"], y=fc["forecast_revenue"], name=t("fc_fore"),
+                                 mode="lines+markers", line=dict(color="#F18F01", width=3, dash="dash")))
+        fig.update_layout(title=f"<b>{t('fc_title')}</b>", height=440, hovermode="x unified",
+                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                          margin=dict(l=10, r=10, t=60, b=10))
+        st.plotly_chart(fig, width="stretch")
+        c1, c2 = st.columns(2)
+        c1.metric(t("fc_fore") + " Σ", f"${fc['forecast_revenue'].sum():,.0f}")
+        c2.metric(t("fc_fore") + " ⌀/mes", f"${fc['forecast_revenue'].mean():,.0f}")
+
+    # ---- Escenarios & Sensibilidad ----
+    with f_sc:
+        yopt = [t("fpa_all")] + [str(y) for y in fpa_years]
+        ysel = st.selectbox(t("fpa_year"), yopt, index=len(yopt) - 1, key="sc_year")
+        year = None if ysel == t("fpa_all") else int(ysel)
+        base = fpa_pl(year)
+        base_rev, base_ebitda = base["revenue"], base["ebitda"]
+        c1, c2, c3 = st.columns(3)
+        g = c1.slider(t("sc_growth"), -30, 50, 10, key="sc_g")
+        mgn = c2.slider(t("sc_margin"), 5, 40, int(round(base["gross_margin_pct"])), key="sc_m")
+        opx = c3.slider(t("sc_opex"), 5, 35, int(fpa.OPEX_PCT * 100), key="sc_o")
+        new_rev = base_rev * (1 + g / 100.0)
+        new_ebitda = new_rev * (mgn / 100.0) - (opx / 100.0) * new_rev
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric(t("sc_base_rev"), f"${base_rev:,.0f}")
+        m2.metric(t("sc_new_rev"), f"${new_rev:,.0f}", f"{g:+d}%")
+        m3.metric(t("sc_new_ebitda"), f"${new_ebitda:,.0f}")
+        delta = new_ebitda - base_ebitda
+        m4.metric(t("sc_delta"), f"${delta:,.0f}",
+                  f"{100*delta/base_ebitda:+.1f}%" if base_ebitda else "—")
+        # Tornado de sensibilidad (± 5 puntos por driver)
+        base_m, base_o = base["gross_margin_pct"], fpa.OPEX_PCT * 100
+        def _eb(gr, mr, op):
+            r = base_rev * (1 + gr / 100.0)
+            return r * (mr / 100.0) - (op / 100.0) * r
+        sens = [
+            ("Revenue growth %", _eb(-5, base_m, base_o), _eb(5, base_m, base_o)),
+            (t("pl_margin"), _eb(0, base_m - 5, base_o), _eb(0, base_m + 5, base_o)),
+            ("OpEx %", _eb(0, base_m, base_o + 5), _eb(0, base_m, base_o - 5)),
+        ]
+        sens.sort(key=lambda s: abs(s[2] - s[1]))
+        figt = go.Figure()
+        for name, lo, hi in sens:
+            figt.add_trace(go.Bar(y=[name], x=[hi - lo], base=lo, orientation="h",
+                                  marker_color="#2E86AB", showlegend=False,
+                                  text=f"${lo:,.0f} → ${hi:,.0f}", textposition="auto"))
+        figt.update_layout(title=f"<b>{t('sc_tornado')}</b>", height=300, margin=dict(l=10, r=10, t=50, b=10))
+        st.plotly_chart(figt, width="stretch")
+
+    # ---- Recurring Revenue ----
+    with f_rec:
+        r = fpa_recurring()
+        rec = fpa.recurring_summary(None)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(t("rec_mrr"), f"${rec['mrr']:,.0f}", rec["period"])
+        c2.metric(t("rec_arr"), f"${rec['arr']:,.0f}")
+        c3.metric(t("rec_paying"), f"{rec['paying_members']:,}")
+        c4.metric(t("rec_arpu"), f"${rec['arpu']:,.2f}")
+        piv = r.pivot_table(index="period", columns="tier", values="mrr", aggfunc="sum").fillna(0)
+        order = [c for c in ["Silver", "Gold", "Platinum", "Standard"] if c in piv.columns]
+        figm = go.Figure()
+        pal = {"Silver": "#A0A0A0", "Gold": "#F1C40F", "Platinum": "#9B59B6", "Standard": "#BDC3C7"}
+        for tier in order:
+            figm.add_trace(go.Scatter(x=piv.index, y=piv[tier], name=tier, mode="lines",
+                                      stackgroup="one", line=dict(width=0.5, color=pal.get(tier))))
+        figm.update_layout(title=f"<b>{t('rec_trend')}</b>", height=400, hovermode="x unified",
+                           margin=dict(l=10, r=10, t=50, b=10))
+        st.plotly_chart(figm, width="stretch")
+        bt = pd.DataFrame(rec["by_tier"])
+        bt = bt[bt["mrr"] > 0]
+        figb = px.bar(bt, x="tier", y="mrr", title=f"<b>{t('rec_bytier')}</b>", color="tier",
+                      color_discrete_map=pal, text="mrr")
+        figb.update_traces(texttemplate="$%{text:,.0f}", textposition="outside")
+        figb.update_layout(height=340, showlegend=False, margin=dict(l=10, r=10, t=50, b=10))
+        st.plotly_chart(figb, width="stretch")
+
+
+# =========================================================================== #
+# TAB 6 — Asistente conversacional (agente MCP embebido en el proceso)
+# =========================================================================== #
+with tab6:
     st.subheader(t("assistant_title"))
     st.caption(t("assistant_caption"))
 

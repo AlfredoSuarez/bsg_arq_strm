@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 from fastmcp import FastMCP
 
+import fpa
 from db import backend_activo, run_query
 
 mcp = FastMCP(
@@ -225,6 +226,62 @@ def detalle_orden(order_id: int) -> str:
     WHERE Order_ID = ?
     """
     return as_json(ejecutar_sql(sql, (order_id,)), "Orden no encontrada")
+
+
+# =========================================================================== #
+# Tools FP&A (Planeación y Análisis Financiero)
+# Actuals reales de `orders`; budget/forecast/recurring modelados (ver fpa.py).
+# =========================================================================== #
+def _json(obj) -> str:
+    return json.dumps(obj, ensure_ascii=False, default=str)
+
+
+@mcp.tool()
+def kpi_ejecutivo(year: int | None = None) -> str:
+    """P&L ejecutivo: revenue, COGS, margen bruto, OpEx, EBITDA y growth YoY.
+
+    Úsala para preguntas de desempeño financiero ("¿cómo cerró 2024?", "EBITDA",
+    "margen"). Sin year devuelve el consolidado de todo el período.
+    """
+    return _json(fpa.executive_pl(year))
+
+
+@mcp.tool()
+def variacion_presupuestal(year: int | None = None) -> str:
+    """Variación presupuestal mensual: actual vs budget (revenue y %), favorable/desfavorable.
+
+    El budget se modela como el año previo del mismo mes más el crecimiento objetivo.
+    """
+    df = fpa.budget_vs_actual(year)
+    cols = ["period", "revenue", "budget_revenue", "var_revenue", "var_revenue_pct"]
+    return _json(df[cols].to_dict("records") if not df.empty else [{"message": "Sin budget para el período"}])
+
+
+@mcp.tool()
+def forecast_ingresos(horizonte: int = 12) -> str:
+    """Rolling forecast de ingresos para los próximos N meses (base crecimiento YoY)."""
+    horizonte = max(1, min(horizonte, 24))
+    return _json(fpa.forecast(horizonte).to_dict("records"))
+
+
+@mcp.tool()
+def escenario(revenue_growth_pct: float, gross_margin_pct: float,
+              opex_pct: float = 18.0, year: int | None = None) -> str:
+    """Modela un escenario what-if sobre el P&L y su impacto en EBITDA.
+
+    Args:
+        revenue_growth_pct: crecimiento de ingresos aplicado a la base (ej. 15 = +15%).
+        gross_margin_pct: margen bruto objetivo del escenario (ej. 24).
+        opex_pct: OpEx como % de revenue (por defecto 18).
+        year: año base opcional; sin él usa todo el período.
+    """
+    return _json(fpa.scenario(revenue_growth_pct, gross_margin_pct, opex_pct, year))
+
+
+@mcp.tool()
+def ingreso_recurrente(year: int | None = None) -> str:
+    """Ingreso recurrente por membresías: MRR, ARR, ARPU y desglose por tier."""
+    return _json(fpa.recurring_summary(year))
 
 
 if __name__ == "__main__":
