@@ -229,6 +229,61 @@ def detalle_orden(order_id: int) -> str:
 
 
 # =========================================================================== #
+# Tools de Marketing (canales, promociones, retención)
+# =========================================================================== #
+@mcp.tool()
+def rendimiento_canal() -> str:
+    """Rendimiento de marketing por canal de tráfico: revenue, margen, ticket y devoluciones.
+
+    Úsala para evaluar qué canales de adquisición traen clientes más rentables.
+    """
+    sql = """
+    SELECT traffic_source AS Channel,
+           COUNT(*) AS Orders,
+           ROUND(SUM(order_amount),2) AS Revenue,
+           ROUND(SUM(profit_amount),2) AS Profit,
+           ROUND(100.0*SUM(profit_amount)/NULLIF(SUM(order_amount),0),2) AS Margin_Pct,
+           ROUND(AVG(order_amount),2) AS AOV,
+           ROUND(100.0*SUM(CASE WHEN returned='Yes' THEN 1 ELSE 0 END)/COUNT(*),2) AS Return_Rate_Pct
+    FROM orders
+    GROUP BY traffic_source
+    ORDER BY Revenue DESC
+    """
+    return as_json(ejecutar_sql(sql))
+
+
+@mcp.tool()
+def impacto_promociones() -> str:
+    """Impacto de cupones/descuentos: compara órdenes con cupón vs sin cupón (ticket, margen, descuento)."""
+    sql = """
+    SELECT coupon_used AS Coupon_Used,
+           COUNT(*) AS Orders,
+           ROUND(SUM(order_amount),2) AS Revenue,
+           ROUND(AVG(order_amount),2) AS AOV,
+           ROUND(AVG(discount_percent),2) AS Avg_Discount_Pct,
+           ROUND(100.0*SUM(profit_amount)/NULLIF(SUM(order_amount),0),2) AS Margin_Pct
+    FROM orders
+    GROUP BY coupon_used
+    ORDER BY Revenue DESC
+    """
+    return as_json(ejecutar_sql(sql))
+
+
+@mcp.tool()
+def retencion_clientes() -> str:
+    """Retención/recompra: tasa de clientes recurrentes, órdenes y gasto promedio por cliente."""
+    sql = """
+    SELECT ROUND(100.0*SUM(CASE WHEN n>1 THEN 1 ELSE 0 END)/COUNT(*),2) AS Repeat_Rate_Pct,
+           COUNT(*) AS Customers,
+           ROUND(AVG(n),2) AS Avg_Orders_Per_Customer,
+           ROUND(AVG(spend),2) AS Avg_Spend_Per_Customer
+    FROM (SELECT customer_id, COUNT(*) AS n, SUM(order_amount) AS spend
+          FROM orders GROUP BY customer_id) t
+    """
+    return as_json(ejecutar_sql(sql))
+
+
+# =========================================================================== #
 # Tools FP&A (Planeación y Análisis Financiero)
 # Actuals reales de `orders`; budget/forecast/recurring modelados (ver fpa.py).
 # =========================================================================== #

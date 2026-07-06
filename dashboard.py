@@ -151,6 +151,21 @@ T: dict[str, dict[str, str]] = {
     "channels_payments": {"es": "Canales y métodos de pago", "en": "Channels and payment methods"},
     "rev_by_channel": {"es": "Revenue por canal de tráfico", "en": "Revenue by traffic source"},
     "orders_by_payment": {"es": "Órdenes por método de pago", "en": "Orders by payment method"},
+    # Marketing
+    "mkt_title": {"es": "Marketing: canal, promociones y retención", "en": "Marketing: channel, promotions & retention"},
+    "mkt_channel_quality": {"es": "Calidad de canal: revenue vs margen (tamaño = órdenes, color = devolución %)",
+                            "en": "Channel quality: revenue vs margin (size = orders, color = return %)"},
+    "lbl_channel": {"es": "Canal", "en": "Channel"},
+    "mkt_coupon": {"es": "Impacto de cupones", "en": "Coupon impact"},
+    "mkt_with": {"es": "Con cupón", "en": "With coupon"},
+    "mkt_without": {"es": "Sin cupón", "en": "Without coupon"},
+    "mkt_uplift": {"es": "Uplift de ticket con cupón", "en": "AOV uplift with coupon"},
+    "mkt_retention": {"es": "Retención y recompra", "en": "Retention & repeat purchase"},
+    "mkt_repeat_rate": {"es": "Tasa de recompra", "en": "Repeat rate"},
+    "mkt_repeat_sub": {"es": "Clientes con más de 1 orden", "en": "Customers with more than 1 order"},
+    "mkt_avg_orders": {"es": "Órdenes por cliente", "en": "Orders per customer"},
+    "mkt_avg_spend": {"es": "Gasto por cliente", "en": "Spend per customer"},
+    "mkt_buckets": {"es": "Clientes por número de órdenes", "en": "Customers by order count"},
     # Insights
     "seg_by_revenue": {"es": "Segmentos device × género (por revenue)",
                        "en": "Device × gender segments (by revenue)"},
@@ -630,6 +645,78 @@ with tab3:
         fig.update_layout(height=380, coloraxis_showscale=False, margin=dict(l=10, r=10, t=50, b=10),
                           xaxis_tickangle=-30)
         st.plotly_chart(fig, width="stretch")
+
+    # ---- Marketing: canal, promociones y retención ----
+    st.divider()
+    st.subheader(t("mkt_title"))
+    _mw = "margen" if LANG == "es" else "margin"
+
+    ch2 = q(
+        f"""SELECT traffic_source AS canal, COUNT(*) AS orders,
+                   ROUND(SUM(order_amount),2) AS revenue,
+                   ROUND(100.0*SUM(profit_amount)/NULLIF(SUM(order_amount),0),2) AS margin_pct,
+                   ROUND(100.0*SUM(CASE WHEN returned='Yes' THEN 1 ELSE 0 END)/COUNT(*),2) AS return_rate
+            FROM orders {where} GROUP BY traffic_source ORDER BY revenue DESC""",
+        params,
+    )
+    fig = px.scatter(ch2, x="revenue", y="margin_pct", size="orders", color="return_rate",
+                     hover_name="canal", color_continuous_scale="RdYlGn_r", size_max=55,
+                     title=f"<b>{t('mkt_channel_quality')}</b>",
+                     labels={"revenue": t("lbl_revenue"), "margin_pct": t("lbl_margin"),
+                             "return_rate": t("lbl_return")})
+    fig.update_layout(height=430, margin=dict(l=10, r=10, t=60, b=10))
+    st.plotly_chart(fig, width="stretch")
+
+    cA, cB = st.columns(2)
+    with cA:
+        st.markdown(f"#### {t('mkt_coupon')}")
+        cp = q(
+            f"""SELECT coupon_used, ROUND(AVG(order_amount),2) AS aov,
+                       ROUND(100.0*SUM(profit_amount)/NULLIF(SUM(order_amount),0),2) AS margin_pct,
+                       ROUND(AVG(discount_percent),2) AS avg_discount
+                FROM orders {where} GROUP BY coupon_used""",
+            params,
+        ).set_index("coupon_used")
+        wc = cp.loc["Yes"] if "Yes" in cp.index else None
+        nc = cp.loc["No"] if "No" in cp.index else None
+        m1, m2 = st.columns(2)
+        if wc is not None:
+            m1.metric(t("mkt_with"), f"${float(wc['aov']):,.0f}", f"{float(wc['margin_pct']):.1f}% {_mw}")
+        if nc is not None:
+            m2.metric(t("mkt_without"), f"${float(nc['aov']):,.0f}", f"{float(nc['margin_pct']):.1f}% {_mw}")
+        if wc is not None and nc is not None and float(nc["aov"]):
+            uplift = 100.0 * (float(wc["aov"]) - float(nc["aov"])) / float(nc["aov"])
+            st.caption(f"{t('mkt_uplift')}: {uplift:+.1f}%")
+    with cB:
+        st.markdown(f"#### {t('mkt_retention')}")
+        ret = q(
+            f"""SELECT ROUND(100.0*SUM(CASE WHEN n>1 THEN 1 ELSE 0 END)/COUNT(*),2) AS repeat_rate,
+                       ROUND(AVG(n),2) AS avg_orders, ROUND(AVG(spend),2) AS avg_spend
+                FROM (SELECT customer_id, COUNT(*) AS n, SUM(order_amount) AS spend
+                      FROM orders {where} GROUP BY customer_id) t""",
+            params,
+        ).iloc[0]
+        r1, r2 = st.columns(2)
+        r1.metric(t("mkt_repeat_rate"), f"{float(ret['repeat_rate']):.1f}%", t("mkt_repeat_sub"))
+        r2.metric(t("mkt_avg_orders"), f"{float(ret['avg_orders']):.2f}",
+                  f"${float(ret['avg_spend']):,.0f} · {t('mkt_avg_spend').lower()}")
+
+    buckets = q(
+        f"""SELECT CASE WHEN n=1 THEN '1' WHEN n BETWEEN 2 AND 3 THEN '2-3'
+                        WHEN n BETWEEN 4 AND 5 THEN '4-5' ELSE '6+' END AS bucket,
+                   COUNT(*) AS customers
+            FROM (SELECT customer_id, COUNT(*) AS n FROM orders {where} GROUP BY customer_id) t
+            GROUP BY 1""",
+        params,
+    )
+    order_b = ["1", "2-3", "4-5", "6+"]
+    buckets["bucket"] = pd.Categorical(buckets["bucket"], categories=order_b, ordered=True)
+    buckets = buckets.sort_values("bucket")
+    figb = px.bar(buckets, x="bucket", y="customers", title=f"<b>{t('mkt_buckets')}</b>",
+                  color="customers", color_continuous_scale="Teal", text="customers")
+    figb.update_traces(textposition="outside")
+    figb.update_layout(height=320, coloraxis_showscale=False, margin=dict(l=10, r=10, t=50, b=10))
+    st.plotly_chart(figb, width="stretch")
 
 # =========================================================================== #
 # TAB 4 — Insights & Acciones

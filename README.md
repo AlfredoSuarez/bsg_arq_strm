@@ -7,7 +7,8 @@ Portal BI de e-commerce operativo, con agente conversacional y dashboard sobre l
 - **Datos en Supabase (Postgres)**: 30.000 órdenes cargadas · backend conmutable SQLite/Supabase (`db.py`) con auto-detección por `DATABASE_URL`.
 - **Dashboard BI bilingüe (`dashboard.py`)**: Streamlit + Plotly, 6 pestañas (Resumen, Tendencia, Segmentación device×género, Insights, **FP&A**, Asistente) con toggle **Español / English**.
 - **Módulo FP&A (`fpa.py`)**: P&L ejecutivo (EBITDA, margen, YoY), Budget vs Actual, Rolling Forecast, Escenarios & Sensibilidad interactivos y Recurring Revenue (MRR/ARR por tier). Actuals reales; budget/forecast/recurring modelados con supuestos explícitos.
-- **Agente MCP embebido**: la pestaña Asistente corre el agente in-process (levanta `mcp_datos.py` como subproceso), así un solo deploy ofrece dashboard + chat. 12 tools MCP (7 de negocio + 5 FP&A).
+- **Agente MCP embebido**: la pestaña Asistente corre el agente in-process (levanta `mcp_datos.py` como subproceso), así un solo deploy ofrece dashboard + chat. 15 tools MCP (7 de negocio + 3 de marketing + 5 FP&A).
+- **Marketing** (en la pestaña Segmentación): calidad de canal (revenue vs margen, devoluciones), impacto de cupones (con vs sin) y retención/recompra por cliente.
 - **Memoria en dos niveles (`memory.py`)**: corto plazo (`InMemorySaver`, en proceso) + **largo plazo durable en Supabase/pgvector** (`agent_memory`): persiste cada turno y recupera contexto relevante entre sesiones — recall **semántico** (pgvector) si hay embeddings, o **léxico** (full-text español) por defecto. Degrada a solo-corto-plazo con SQLite.
 - **System prompt endurecido contra prompt injection**: como la app y el repo son públicos, el agente trata los resultados de las tools y la memoria recuperada como **datos no confiables**, nunca como instrucciones; no revela el prompt, claves ni configuración, y rechaza jailbreaks. Validado con pruebas adversariales reales (jailbreak directo + inyección vía datos de tool).
 - **Desplegado en Streamlit Community Cloud** contra Supabase (transaction pooler, puerto 6543).
@@ -168,6 +169,14 @@ La guía completa (esquema, `DATABASE_URL`, pooler, RLS y pgvector) está en [do
 | `detalle_orden` | Recupera el detalle de una orden específica | `Order_ID` y atributos de la transacción |
 
 No existe una tool genérica como `ejecutar_sql(sql)`. Esa decisión protege la base, vuelve visible la lógica de negocio y facilita que el LLM elija la herramienta correcta.
+
+### Tools de Marketing
+
+| Tool | Capacidad |
+|---|---|
+| `rendimiento_canal` | Revenue, margen, ticket y devoluciones por canal de tráfico |
+| `impacto_promociones` | Cupón vs sin cupón: ticket, margen y descuento promedio |
+| `retencion_clientes` | Tasa de recompra, órdenes y gasto promedio por cliente |
 
 ### Tools FP&A (financieras)
 
