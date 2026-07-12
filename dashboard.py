@@ -29,6 +29,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from plotly.subplots import make_subplots
 
@@ -217,6 +218,18 @@ T: dict[str, dict[str, str]] = {
     "sub_forecast": {"es": "Forecast", "en": "Forecast"},
     "sub_scenario": {"es": "Escenarios", "en": "Scenarios"},
     "sub_recurring": {"es": "Recurring Revenue", "en": "Recurring Revenue"},
+    # Deck (presentación ejecutiva embebida desde Gamma)
+    "tab_deck": {"es": "🎤 Deck", "en": "🎤 Deck"},
+    "deck_head": {"es": "Presentación ejecutiva del proyecto",
+                  "en": "Executive project presentation"},
+    "deck_sub": {"es": "Arquitectura MCP · LangChain · Supabase · Streamlit — recorrido del portal, "
+                       "las 15 tools de negocio y los resultados.",
+                 "en": "MCP architecture · LangChain · Supabase · Streamlit — a walkthrough of the portal, "
+                       "the 15 business tools and the results."},
+    "deck_open": {"es": "🔗 Abrir el deck en Gamma (pantalla completa / exportar)",
+                  "en": "🔗 Open the deck in Gamma (full screen / export)"},
+    "deck_fallback": {"es": "Si la presentación no carga aquí, ábrela con el enlace de arriba.",
+                      "en": "If the presentation does not load here, open it with the link above."},
     "pl_gp": {"es": "Utilidad bruta", "en": "Gross Profit"},
     "pl_margin": {"es": "Margen bruto", "en": "Gross margin"},
     "pl_ebitda": {"es": "EBITDA", "en": "EBITDA"},
@@ -443,8 +456,9 @@ k = kpis.iloc[0]
 st.sidebar.metric(t("orders_filter"), f"{int(k['orders']):,}")
 st.sidebar.metric(t("revenue_filter"), f"${float(k['revenue']):,.0f}")
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-    [t("tab_summary"), t("tab_trend"), t("tab_segment"), t("tab_insights"), t("tab_fpa"), t("tab_assistant")]
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+    [t("tab_summary"), t("tab_trend"), t("tab_segment"), t("tab_insights"), t("tab_fpa"),
+     t("tab_assistant"), t("tab_deck")]
 )
 
 # =========================================================================== #
@@ -1015,5 +1029,21 @@ with tab6:
             st.session_state.chat_msgs = []
             st.session_state.chat_sid = "dash-" + uuid.uuid4().hex[:8]
             st.rerun()
+
+# =========================================================================== #
+# TAB 7 — Deck ejecutivo: presentación del proyecto embebida desde Gamma.
+# El deck incluye el link de esta app y del repositorio.
+# =========================================================================== #
+GAMMA_DOC = "https://gamma.app/docs/3o80lr80zn71soc"
+GAMMA_EMBED = "https://gamma.app/embed/3o80lr80zn71soc"
+
+with tab7:
+    st.subheader(t("deck_head"))
+    st.caption(t("deck_sub"))
+    st.link_button(t("deck_open"), GAMMA_DOC)
+    # Gamma puede restringir el iframe en algunos navegadores; el enlace de arriba
+    # siempre funciona como respaldo.
+    components.iframe(GAMMA_EMBED, height=640, scrolling=True)
+    st.caption(t("deck_fallback"))
 
 st.caption(t("footer").format(b=backend_activo()))
