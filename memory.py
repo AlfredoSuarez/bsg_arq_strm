@@ -28,6 +28,12 @@ EMBED_MODEL = os.getenv("EMBEDDINGS_MODEL", "text-embedding-3-small")
 EMBED_BASE_URL = os.getenv("EMBEDDINGS_BASE_URL", "https://api.openai.com/v1")
 RECALL_K = int(os.getenv("MEMORY_RECALL_K", "4"))
 
+# Capacidad de escritura de la memoria de largo plazo (cache de proceso).
+# None: sin determinar · True: el INSERT funcionó · False: el INSERT falló (p.ej. RLS
+# read-only). Al detectar False dejamos de intentar writes condenados y la UI puede
+# reportar el modo solo-lectura. El recall (SELECT) sigue operando con normalidad.
+_writes_ok: bool | None = None
+
 
 def memory_enabled() -> bool:
     """La memoria de largo plazo solo opera con backend Supabase y si no se desactiva."""
@@ -60,8 +66,13 @@ def _vec_literal(embedding: list[float]) -> str:
 
 
 def save_turn(session_id: str, canal: str, rol: str, contenido: str) -> None:
-    """Persiste un turno (con embedding si hay proveedor). Best-effort: nunca lanza."""
-    if not memory_enabled() or not (contenido or "").strip():
+    """Persiste un turno (con embedding si hay proveedor). Best-effort: nunca lanza.
+
+    Si un INSERT falla (p.ej. la tabla está en modo solo-lectura por RLS), se recuerda
+    en `_writes_ok` para no reintentar writes condenados en los turnos siguientes.
+    """
+    global _writes_ok
+    if not memory_enabled() or _writes_ok is False or not (contenido or "").strip():
         return
     try:
         emb = _embed(contenido)
@@ -77,8 +88,9 @@ def save_turn(session_id: str, canal: str, rol: str, contenido: str) -> None:
                 "VALUES (?, ?, ?, ?) RETURNING id",
                 (session_id, canal, rol, contenido),
             )
-    except Exception:  # noqa: BLE001
-        pass
+        _writes_ok = True
+    except Exception:  # noqa: BLE001 - best-effort; la memoria nunca rompe el turno
+        _writes_ok = False
 
 
 def recall(session_id: str, query: str, k: int = RECALL_K) -> list[dict]:
@@ -152,3 +164,15 @@ def format_context(recuerdos: list[dict], max_chars: int = 220) -> str:
 def semantic_mode() -> str:
     """Indica si el recall usa embeddings o léxico (para trazabilidad/UI)."""
     return "semantico(pgvector)" if os.getenv("EMBEDDINGS_API_KEY") else "lexico(full-text)"
+
+
+def memory_status() -> str:
+    """Estado de la memoria de largo plazo para la UI/traza.
+
+    'off'         : desactivada (SQLite o AGENT_MEMORY=off).
+    'read_only'   : la lectura funciona pero la escritura está bloqueada (p.ej. RLS).
+    'read_write'  : persiste y recupera con normalidad.
+    """
+    if not memory_enabled():
+        return "off"
+    return "read_only" if _writes_ok is False else "read_write"

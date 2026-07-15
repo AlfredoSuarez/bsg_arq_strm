@@ -35,6 +35,16 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DATA_MCP_URL = os.getenv("DATA_MCP_URL", "http://127.0.0.1:8000/mcp")
 WINDOW_MESSAGES = int(os.getenv("MEMORY_WINDOW_MESSAGES", "8"))
 
+
+def _nota_memoria(estado: str) -> str:
+    """Nota explicativa del estado de la memoria de largo plazo para la traza/UI."""
+    return {
+        "read_write": "Persiste en Supabase/pgvector; sobrevive reinicios y cruza sesiones.",
+        "read_only": "Backend Supabase en modo solo-lectura (RLS): recupera contexto pero "
+                     "no persiste turnos nuevos. La conversación funciona con memoria de corto plazo.",
+        "off": "Requiere backend Supabase; con SQLite solo hay memoria de corto plazo.",
+    }.get(estado, "")
+
 # System prompt endurecido contra prompt injection (app y repo PÚBLICOS).
 # Superficies de inyección cubiertas: mensaje del usuario, resultados de tools
 # (datos de BD potencialmente manipulados) y memoria de largo plazo inyectada.
@@ -213,11 +223,10 @@ async def resolver_consulta(
             },
             "largo_plazo": {
                 "habilitada": longterm.memory_enabled(),
+                "estado": longterm.memory_status(),
                 "modo_recall": longterm.semantic_mode() if longterm.memory_enabled() else "desactivada",
                 "recuerdos_recuperados": len(recuerdos),
-                "nota": "Persiste en Supabase/pgvector; sobrevive reinicios y cruza sesiones."
-                        if longterm.memory_enabled()
-                        else "Requiere backend Supabase; con SQLite solo hay memoria de corto plazo.",
+                "nota": _nota_memoria(longterm.memory_status()),
             },
         },
         "recuerdos": recuerdos,
